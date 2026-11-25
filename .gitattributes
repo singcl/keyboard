@@ -1,0 +1,3 @@
+# 确保脚本换行符在各平台下正确
+*.sh text eol=lf
+*.bat text eol=crlf

@@ -23,6 +23,13 @@
 需要 Go 1.18+，项目无 cgo 依赖，在 Windows 下执行：
 
 ```
+build.bat      # Windows cmd / PowerShell
+./build.sh     # Git Bash / WSL
+```
+
+或手动执行：
+
+```
 CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyboard
 ```
 
