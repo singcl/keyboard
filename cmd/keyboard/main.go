@@ -39,12 +39,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//ni.SetToolTip("右键选择不同击键或退出")
+	//ni.SetToolTip("右键设置拦截阈值或退出")
 
-	for i := 10; i <= 20; i += 5 {
+	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
+	for _, item := range []struct {
+		rate int
+		ms   int
+	}{
+		{10, 100},
+		{15, 67},
+		{20, 50},
+	} {
 		action := walk.NewAction()
-		action.SetText(fmt.Sprintf("击键%d", i))
-		action.Triggered().Attach(setKeyTimesFunc(i))
+		action.SetText(fmt.Sprintf("防抖 %dms", item.ms))
+		action.Triggered().Attach(setKeyTimesFunc(item.rate))
 		ni.ContextMenu().Actions().Add(action)
 	}
 
@@ -64,7 +72,7 @@ func main() {
 
 	// We put an exit action into the context menu.
 	exitAction := walk.NewAction()
-	if err := exitAction.SetText("E&xit"); err != nil {
+	if err := exitAction.SetText("退出"); err != nil {
 		log.Fatal(err)
 	}
 	exitAction.Triggered().Attach(func() { walk.App().Exit(0) })
@@ -74,7 +82,7 @@ func main() {
 
 	ni.SetVisible(true)
 
-	if err := ni.ShowInfo("右键图标选择", "右键图标选择击键（默认10）或退出"); err != nil {
+	if err := ni.ShowInfo("右键图标设置", "右键图标可设置拦截阈值（默认 100ms）或退出"); err != nil {
 		log.Fatal(err)
 	}
 
