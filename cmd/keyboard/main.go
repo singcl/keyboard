@@ -292,16 +292,15 @@ func main() {
 			})
 			_ = targetMenu.Actions().Add(action)
 		}
-
-		if err := targetMenu.Actions().Add(walk.NewSeparatorAction()); err != nil {
-			return
-		}
-		refresh := walk.NewAction()
-		_ = refresh.SetText("刷新列表")
-		refresh.Triggered().Attach(rebuildTargetMenu)
-		_ = targetMenu.Actions().Add(refresh)
 	}
 	rebuildTargetMenu()
+
+	// 每次右键打开菜单前刷新设备列表，保证列表与当前连接的键盘一致
+	ni.MouseUp().Attach(func(x, y int, button walk.MouseButton) {
+		if button == walk.RightButton {
+			rebuildTargetMenu()
+		}
+	})
 
 	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
 		fatal(err)
