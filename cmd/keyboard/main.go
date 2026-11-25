@@ -57,7 +57,7 @@ func main() {
 		cfgMu.Unlock()
 	}
 
-	userPaused := false
+	userPaused := cfg.Paused
 	targetOnline := true
 
 	targetConfigured := func() bool {
@@ -183,6 +183,7 @@ func main() {
 
 	pauseAction.Triggered().Attach(func() {
 		userPaused = !userPaused
+		updateCfg(func(c *config.Config) { c.Paused = userPaused })
 		applyPauseState()
 	})
 	if err := ni.ContextMenu().Actions().Add(pauseAction); err != nil {

@@ -16,7 +16,7 @@
 
 托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、选择目标键盘、查看/清空日志、定位配置文件。暂停时托盘图标会变灰，菜单第一行也会显示当前状态。开启「开机自启」后就不需要每次手动双击了。
 
-下载地址：https://github.com/garfeng/keyboard/releases/latest
+下载地址：https://github.com/singcl/keyboard/releases/latest
 
 ## 构建
 

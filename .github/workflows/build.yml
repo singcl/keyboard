@@ -26,6 +26,15 @@ jobs:
         env:
           CGO_ENABLED: "0"
 
+      # 打 tag 发布时，用 tag 号覆盖 exe 内的版本信息，避免手动改 winres.json
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd/keyboard/rsrc.syso --arch amd64 --no-suffix --file-version $ver --product-version $ver
+        env:
+          CGO_ENABLED: "0"
+
       - name: Build
         run: go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyboard
         env:

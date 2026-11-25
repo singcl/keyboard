@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -169,15 +171,55 @@ func (v *logView) autoRefresh() {
 	}
 }
 
-// tailLog 返回日志文件的最后 maxLines 行；文件不存在或为空时给出提示。
+// tailLog 只从文件尾部按块读取，返回最后 maxLines 行；文件不存在或为空时给出提示。
 func tailLog(maxLines int) string {
 	path, err := logging.Path()
 	if err != nil {
 		return "（无法定位日志文件：" + err.Error() + "）"
 	}
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "（暂无日志）"
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil || info.Size() == 0 {
+		return "（暂无日志）"
+	}
+
+	const chunkSize = 32 * 1024
+	var (
+		data      []byte
+		offset    = info.Size()
+		truncated bool
+	)
+	for offset > 0 {
+		n := int64(chunkSize)
+		if offset < n {
+			n = offset
+		}
+		offset -= n
+
+		buf := make([]byte, n)
+		if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+			return "（读取日志失败：" + err.Error() + "）"
+		}
+		data = append(buf, data...)
+
+		if bytes.Count(data, []byte{'\n'}) > maxLines {
+			break
+		}
+	}
+	truncated = offset > 0
+
+	// 未读到文件开头时，首行可能是被截断的半行，丢弃它
+	if truncated {
+		i := bytes.IndexByte(data, '\n')
+		if i < 0 {
+			return "（暂无日志）"
+		}
+		data = data[i+1:]
 	}
 
 	content := strings.TrimRight(string(data), "\r\n")

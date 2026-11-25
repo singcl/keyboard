@@ -20,6 +20,9 @@ type Config struct {
 
 	// OnlyWhenConnected 为 true 时，仅当目标键盘在线才启用防抖
 	OnlyWhenConnected bool `json:"only_when_connected"`
+
+	// Paused 记录用户是否手动暂停了拦截，重启后保持该状态
+	Paused bool `json:"paused"`
 }
 
 // Path 返回配置文件路径，并确保所在目录存在。
