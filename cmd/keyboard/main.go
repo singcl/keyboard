@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -39,6 +40,21 @@ func main() {
 	defer release()
 
 	cfg := config.Load()
+
+	// 配置在主线程写入、看门狗 goroutine 读取，用互斥锁保护
+	var cfgMu sync.Mutex
+	cfgSnapshot := func() (bool, string, string) {
+		cfgMu.Lock()
+		defer cfgMu.Unlock()
+		return cfg.OnlyWhenConnected, cfg.TargetName, cfg.TargetPath
+	}
+	updateCfg := func(update func(*config.Config)) {
+		cfgMu.Lock()
+		update(&cfg)
+		_ = config.Save(cfg)
+		cfgMu.Unlock()
+	}
+
 	userPaused := false
 	targetOnline := true
 
@@ -47,10 +63,9 @@ func main() {
 	}
 	if cfg.OnlyWhenConnected && targetConfigured() {
 		targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
-	}
-
-	saveCfg := func() {
-		_ = config.Save(cfg)
+		if !targetOnline {
+			logging.Event("启动时目标键盘未连接，暂不拦截")
+		}
 	}
 
 	effectivePaused := func() bool {
@@ -81,6 +96,18 @@ func main() {
 		fatal(err)
 	}
 
+	// 菜单顶部状态行，直接显示当前是否在拦截
+	statusAction := walk.NewAction()
+	if err := statusAction.SetEnabled(false); err != nil {
+		fatal(err)
+	}
+	if err := ni.ContextMenu().Actions().Add(statusAction); err != nil {
+		fatal(err)
+	}
+	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
+		fatal(err)
+	}
+
 	var actions = make(map[int]*walk.Action)
 
 	updateTip := func() {
@@ -91,6 +118,7 @@ func main() {
 		case cfg.OnlyWhenConnected && targetConfigured() && !targetOnline:
 			state = "已暂停（目标键盘未连接）"
 		}
+		_ = statusAction.SetText("状态：" + state)
 		_ = ni.SetToolTip(fmt.Sprintf("键盘防抖 %dms · %s", cfg.DebounceMS, state))
 	}
 
@@ -102,10 +130,9 @@ func main() {
 	}
 
 	applyDebounce := func(ms int) {
-		cfg.DebounceMS = ms
+		updateCfg(func(c *config.Config) { c.DebounceMS = ms })
 		hook.SetDebounce(time.Duration(ms) * time.Millisecond)
 		syncMenu()
-		saveCfg()
 	}
 
 	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
@@ -209,13 +236,12 @@ func main() {
 				"请先在「目标键盘」子菜单中选择要匹配的设备。", walk.MsgBoxOK|walk.MsgBoxIconInformation)
 			return
 		}
-		cfg.OnlyWhenConnected = enable
+		updateCfg(func(c *config.Config) { c.OnlyWhenConnected = enable })
 		targetOnline = true
 		if enable {
 			targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
 		}
 		_ = gateAction.SetChecked(enable)
-		saveCfg()
 		applyPauseState()
 	})
 	if err := ni.ContextMenu().Actions().Add(gateAction); err != nil {
@@ -253,13 +279,14 @@ func main() {
 			_ = action.SetText(text)
 			_ = action.SetChecked(d.Matches(cfg.TargetName, cfg.TargetPath))
 			action.Triggered().Attach(func() {
-				cfg.TargetName = d.Name
-				cfg.TargetPath = d.Path
+				updateCfg(func(c *config.Config) {
+					c.TargetName = d.Name
+					c.TargetPath = d.Path
+				})
 				targetOnline = true
 				if cfg.OnlyWhenConnected {
-					targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
+					targetOnline = devices.Online(d.Name, d.Path)
 				}
-				saveCfg()
 				applyPauseState()
 				rebuildTargetMenu()
 			})
@@ -342,12 +369,7 @@ func main() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			var enabled bool
-			var name, path string
-			mw.Synchronize(func() {
-				enabled = cfg.OnlyWhenConnected
-				name, path = cfg.TargetName, cfg.TargetPath
-			})
+			enabled, name, path := cfgSnapshot()
 			if !enabled || (name == "" && path == "") {
 				continue
 			}
@@ -357,6 +379,11 @@ func main() {
 				if online != targetOnline {
 					targetOnline = online
 					applyPauseState()
+					if online {
+						logging.Event("目标键盘已连接，自动恢复拦截")
+					} else {
+						logging.Event("目标键盘已断开，自动暂停拦截")
+					}
 				}
 			})
 		}

@@ -16,16 +16,17 @@ import (
 
 const (
 	maxLogSize = 1 << 20 // 1MB，超过后轮转为 keyboard.log.1
-	header     = "# keyboard 拦截日志（仅记录被拦截的按键）"
+	header     = "# keyboard 日志（记录被拦截的按键与状态事件）"
 )
 
-// event 是钩子线程投递给日志 goroutine 的一次拦截记录。
+// event 是钩子线程投递给日志 goroutine 的一次拦截记录或状态事件。
 type event struct {
 	at       time.Time
 	vk       uint32
 	scanCode uint32
 	extended bool
 	interval time.Duration
+	note     string
 }
 
 var (
@@ -43,7 +44,15 @@ func init() {
 // Blocked 记录一次按键拦截。只做入队，不阻塞钩子线程；队列满时直接丢弃。
 func Blocked(vk, scanCode uint32, extended bool, interval time.Duration) {
 	select {
-	case events <- event{time.Now(), vk, scanCode, extended, interval}:
+	case events <- event{at: time.Now(), vk: vk, scanCode: scanCode, extended: extended, interval: interval}:
+	default:
+	}
+}
+
+// Event 记录一次状态事件（如目标键盘上下线、自动暂停/恢复）。
+func Event(note string) {
+	select {
+	case events <- event{at: time.Now(), note: note}:
 	default:
 	}
 }
@@ -105,6 +114,12 @@ func write(e event) {
 	if info, err := os.Stat(path); err == nil && info.Size() > maxLogSize {
 		_ = os.Remove(path + ".1")
 		_ = os.Rename(path, path+".1")
+	}
+
+	if e.note != "" {
+		_ = appendLine(path, fmt.Sprintf("%s\tevent\t%s",
+			e.at.Format("2006-01-02 15:04:05.000"), e.note))
+		return
 	}
 
 	name := keyName(e.scanCode, e.extended)
