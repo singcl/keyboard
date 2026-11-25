@@ -14,7 +14,7 @@
 
 解压后，双击里面的 keyboard.exe 运行。
 
-托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、查看/清空日志。开启「开机自启」后就不需要每次手动双击了。
+托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、查看/清空日志。开启「开机自启」后就不需要每次手动双击了。
 
 下载地址：https://github.com/garfeng/keyboard/releases/latest
 
@@ -51,6 +51,7 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 │   ├── assets/                # 图标与清单；icon.png 通过 go:embed 编入程序
 │   ├── autostart/             # 开机自启（注册表 Run 键）
 │   ├── config/                # 防抖阈值持久化
+│   ├── devices/               # 键盘设备识别（Raw Input）
 │   ├── hook/                  # Win32 低级键盘钩子与拦截逻辑
 │   ├── logging/               # 拦截日志（异步写入、轮转、清空）
 │   └── singleinstance/        # 单实例互斥量
@@ -66,7 +67,15 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 
 注意：日志包含被拦截按键的名称和键码，属于输入信息，分享或反馈问题前请先清空或自行删改。
 
+## 按键盘设备过滤
+
+托盘菜单「识别键盘设备」会列出当前系统的键盘设备（品牌、VID/PID、设备路径），方便你确认是哪一把键盘有问题。
+
+但拦截本身仍是**对所有键盘生效**的：Windows 的低级键盘钩子（`WH_KEYBOARD_LL`）回调里没有设备标识，纯用户态程序无法判断按键来自哪把键盘。若确实需要只对指定设备生效，只能安装内核过滤驱动（如 Interception），代价是需要管理员权限、驱动签名，并会失去免安装单文件的分发方式。
+
 ## 更新记录
+
+* 2026年11月：新增设备识别、配置持久化、开机自启、暂停防抖、日志清理
 
 * 2026年11月：纯 Go 重写，新增拦截日志与内嵌图标
 

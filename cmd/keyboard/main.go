@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/png"
 	"os"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -14,6 +15,7 @@ import (
 	"keyboard/internal/assets"
 	"keyboard/internal/autostart"
 	"keyboard/internal/config"
+	"keyboard/internal/devices"
 	"keyboard/internal/hook"
 	"keyboard/internal/logging"
 	"keyboard/internal/singleinstance"
@@ -136,6 +138,37 @@ func main() {
 		_ = autoAction.SetChecked(enable)
 	})
 	if err := ni.ContextMenu().Actions().Add(autoAction); err != nil {
+		fatal(err)
+	}
+
+	// 识别键盘设备（仅展示，拦截仍对所有键盘生效）
+	deviceAction := walk.NewAction()
+	if err := deviceAction.SetText("识别键盘设备"); err != nil {
+		fatal(err)
+	}
+	deviceAction.Triggered().Attach(func() {
+		list, err := devices.List()
+		if err != nil {
+			walk.MsgBox(mw, "识别键盘设备失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+			return
+		}
+		if len(list) == 0 {
+			walk.MsgBox(mw, "键盘设备", "未检测到键盘设备。", walk.MsgBoxOK|walk.MsgBoxIconInformation)
+			return
+		}
+
+		var b strings.Builder
+		fmt.Fprintf(&b, "检测到 %d 个键盘设备（防抖仍对所有键盘生效）：\n", len(list))
+		for i, d := range list {
+			fmt.Fprintf(&b, "\n%d. %s", i+1, d.DisplayName())
+			if d.VID != "" {
+				fmt.Fprintf(&b, "（VID_%s / PID_%s）", d.VID, d.PID)
+			}
+			fmt.Fprintf(&b, "\n   %s", d.Path)
+		}
+		walk.MsgBox(mw, "键盘设备", b.String(), walk.MsgBoxOK|walk.MsgBoxIconInformation)
+	})
+	if err := ni.ContextMenu().Actions().Add(deviceAction); err != nil {
 		fatal(err)
 	}
 
