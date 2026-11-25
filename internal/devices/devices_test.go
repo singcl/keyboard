@@ -1,6 +1,7 @@
 package devices
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -61,6 +62,10 @@ func TestFormatList(t *testing.T) {
 
 func TestList(t *testing.T) {
 	list, err := List()
+	if errors.Is(err, ErrUnsupported) {
+		// macOS / Linux 目前不提供设备枚举，跳过
+		t.Skip(err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
