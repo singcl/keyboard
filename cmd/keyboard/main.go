@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	mbOK        = 0x00000000
-	mbIconError = 0x00000010
+	mbOK              = 0x00000000
+	mbIconError       = 0x00000010
+	mbIconInformation = 0x00000040
 )
 
 var (
@@ -40,6 +41,11 @@ var (
 func main() {
 	release, ok := singleinstance.Acquire("keyboard-misfire-filter")
 	if !ok {
+		// 已有实例在运行，提示用户从托盘操作，避免双击后“毫无反应”
+		text, _ := windows.UTF16PtrFromString("程序已在运行，请在任务栏右下角的托盘图标中操作。")
+		caption, _ := windows.UTF16PtrFromString("键盘防抖")
+		procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)),
+			uintptr(unsafe.Pointer(caption)), mbOK|mbIconInformation)
 		return
 	}
 	defer release()
@@ -163,6 +169,7 @@ func main() {
 		updateCfg(func(c *config.Config) { c.DebounceMS = ms })
 		hook.SetDebounce(time.Duration(ms) * time.Millisecond)
 		syncMenu()
+		logging.Event(fmt.Sprintf("防抖阈值调整为 %dms", ms))
 	}
 
 	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
@@ -219,6 +226,11 @@ func main() {
 		userPaused = !userPaused
 		updateCfg(func(c *config.Config) { c.Paused = userPaused })
 		applyPauseState()
+		if userPaused {
+			logging.Event("已手动暂停拦截")
+		} else {
+			logging.Event("已手动恢复拦截")
+		}
 	})
 	if err := ni.ContextMenu().Actions().Add(pauseAction); err != nil {
 		fatal(err)
@@ -237,6 +249,11 @@ func main() {
 			return
 		}
 		_ = autoAction.SetChecked(enable)
+		if enable {
+			logging.Event("已开启开机自启")
+		} else {
+			logging.Event("已关闭开机自启")
+		}
 	})
 	if err := ni.ContextMenu().Actions().Add(autoAction); err != nil {
 		fatal(err)
@@ -286,6 +303,11 @@ func main() {
 			targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
 		}
 		_ = gateAction.SetChecked(enable)
+		if enable {
+			logging.Event("已开启仅目标键盘在线时防抖")
+		} else {
+			logging.Event("已关闭仅目标键盘在线时防抖")
+		}
 		applyPauseState()
 	})
 	if err := ni.ContextMenu().Actions().Add(gateAction); err != nil {
@@ -332,6 +354,7 @@ func main() {
 					targetOnline = devices.Online(d.Name, d.Path)
 				}
 				applyPauseState()
+				logging.Event("目标键盘切换为：" + d.DisplayName())
 				rebuildTargetMenu()
 			})
 			_ = targetMenu.Actions().Add(action)
@@ -360,10 +383,12 @@ func main() {
 	}
 	rebuildTargetMenu()
 
-	// 每次右键打开菜单前刷新设备列表，保证列表与当前连接的键盘一致
+	// 每次右键打开菜单前刷新设备列表与开机自启状态，保证菜单与实际一致
 	ni.MouseUp().Attach(func(x, y int, button walk.MouseButton) {
 		if button == walk.RightButton {
+			_ = autoAction.SetChecked(autostart.Enabled())
 			rebuildTargetMenu()
+			syncMenu()
 		}
 	})
 
