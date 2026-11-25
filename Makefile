@@ -1,3 +1,3 @@
 all:
-	go build -ldflags "-w -s -H windowsgui"
+	CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui"
 

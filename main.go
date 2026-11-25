@@ -1,7 +1,5 @@
 package main
 
-//#include "keyboard.h"
-import "C"
 import (
 	"fmt"
 	"log"
@@ -9,19 +7,13 @@ import (
 	"github.com/lxn/walk"
 )
 
-var (
-	keyNumberPerSecond = 10
-)
-
-func main(){
+func main() {
 	mw, err := walk.NewMainWindow()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-
-
-	icon, err :=  walk.Resources.Icon("icon.ico") //walk.NewIconFromResource("icon.ico")
+	icon, err := walk.Resources.Icon("icon.ico") //walk.NewIconFromResource("icon.ico")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,13 +25,13 @@ func main(){
 
 	defer ni.Dispose()
 
-	if err := ni.SetIcon(icon);err != nil {
+	if err := ni.SetIcon(icon); err != nil {
 		log.Fatal(err)
 	}
 
 	//ni.SetToolTip("右键选择不同击键或退出")
 
-	for i:=10;i<=20;i+=5 {
+	for i := 10; i <= 20; i += 5 {
 		action := walk.NewAction()
 		action.SetText(fmt.Sprintf("击键%d", i))
 		action.Triggered().Attach(SetKeyTimesFunc(i))
@@ -62,15 +54,14 @@ func main(){
 		log.Fatal(err)
 	}
 
-	go C.Setup()
+	go setupHook()
 
 	// Run the message loop.
 	mw.Run()
 }
 
-func SetKeyTimesFunc(i int) func(){
-	return func(){
-			keyNumberPerSecond = i
-			C.UpdateKeyPressRate(C.int(keyNumberPerSecond));
+func SetKeyTimesFunc(i int) func() {
+	return func() {
+		updateKeyPressRate(i)
 	}
 }
