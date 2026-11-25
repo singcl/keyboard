@@ -48,6 +48,20 @@ func main() {
 		ni.ContextMenu().Actions().Add(action)
 	}
 
+	// 打开拦截日志
+	logAction := walk.NewAction()
+	if err := logAction.SetText("打开日志"); err != nil {
+		log.Fatal(err)
+	}
+	logAction.Triggered().Attach(func() {
+		if err := openLogFileForUser(); err != nil {
+			walk.MsgBox(mw, "打开日志失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+		}
+	})
+	if err := ni.ContextMenu().Actions().Add(logAction); err != nil {
+		log.Fatal(err)
+	}
+
 	// We put an exit action into the context menu.
 	exitAction := walk.NewAction()
 	if err := exitAction.SetText("E&xit"); err != nil {

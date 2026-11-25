@@ -93,6 +93,7 @@ func keyboardProc(nCode, wParam, lParam uintptr) uintptr {
 				now := time.Now()
 				delay := time.Duration(atomic.LoadInt64(&delayNanos))
 				if !lastDown.IsZero() && vk == lastVK && now.Sub(lastDown) < delay {
+					logBlocked(vk, kb.ScanCode, kb.Flags&1 != 0, now.Sub(lastDown))
 					return 1 // 拦截本次误触发
 				}
 				lastDown = now
