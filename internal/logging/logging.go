@@ -1,4 +1,4 @@
-// Package logging 负责把被拦截的按键写入日志文件，并支持用系统默认程序打开日志。
+// Package logging 负责把被拦截的按键写入日志文件，并提供路径与清理操作。
 //
 // 日志位于 %LOCALAPPDATA%\keyboard\keyboard.log，只有真正被拦截的按键才会写入。
 // 写入在独立 goroutine 中完成，避免在键盘钩子回调里做磁盘 IO。
@@ -55,22 +55,6 @@ func Event(note string) {
 	case events <- event{at: time.Now(), note: note}:
 	default:
 	}
-}
-
-// Open 确保日志文件存在，然后用系统默认程序打开。
-func Open() error {
-	path, err := Path()
-	if err != nil {
-		return err
-	}
-
-	if info, statErr := os.Stat(path); os.IsNotExist(statErr) || (statErr == nil && info.Size() == 0) {
-		if err := appendLine(path, header); err != nil {
-			return err
-		}
-	}
-
-	return windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(path), nil, nil, windows.SW_SHOWNORMAL)
 }
 
 // Clear 删除日志文件（含轮转备份）。

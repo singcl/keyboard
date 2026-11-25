@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Build
+        run: go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyboard
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Package
+        run: Compress-Archive -Path keyboard.exe, README.md -DestinationPath keyboard-windows-amd64.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-windows-amd64
+          path: keyboard-windows-amd64.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: keyboard-windows-amd64.zip
+          generate_release_notes: true

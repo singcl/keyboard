@@ -14,7 +14,7 @@
 
 解压后，双击里面的 keyboard.exe 运行。
 
-托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、选择目标键盘、查看/清空日志。开启「开机自启」后就不需要每次手动双击了。
+托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、选择目标键盘、查看/清空日志、定位配置文件。暂停时托盘图标会变灰，菜单第一行也会显示当前状态。开启「开机自启」后就不需要每次手动双击了。
 
 下载地址：https://github.com/garfeng/keyboard/releases/latest
 
@@ -57,13 +57,15 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 │   └── singleinstance/        # 单实例互斥量
 ├── winres/
 │   └── winres.json            # 图标、清单与版本信息资源定义
+├── .github/workflows/build.yml # CI：自动构建并打包发布
+├── build.bat / build.sh       # 本地构建脚本
 ├── go.mod
 └── README.md
 ```
 
 ## 拦截日志
 
-被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，也可通过托盘右键菜单「打开日志」查看、「清空日志」删除。
+被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，托盘右键「查看日志」会在内置窗口里显示最后 500 行并每 2 秒自动刷新，「清空日志」可删除；「配置文件位置」会在资源管理器中定位 `config.json`。
 
 注意：日志包含被拦截按键的名称和键码，属于输入信息，分享或反馈问题前请先清空或自行删改。
 
@@ -78,6 +80,8 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 但拦截本身仍是**对所有键盘生效**的：Windows 的低级键盘钩子（`WH_KEYBOARD_LL`）回调里没有设备标识，纯用户态程序无法判断按键来自哪把键盘。若确实需要只对指定设备生效，只能安装内核过滤驱动（如 Interception），代价是需要管理员权限、驱动签名，并会失去免安装单文件的分发方式。
 
 ## 更新记录
+
+* 2026年11月：暂停时图标变灰，新增内置日志窗口与「配置文件位置」，加入 GitHub Actions 自动构建与发布
 
 * 2026年11月：新增目标键盘选择与「仅目标键盘在线时防抖」，修复自动暂停不生效的问题
 

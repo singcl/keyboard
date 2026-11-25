@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"image"
+	"image/draw"
 	"image/png"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 	"unsafe"
@@ -85,6 +88,14 @@ func main() {
 		fatal(err)
 	}
 
+	// 暂停时使用灰度图标，便于一眼区分状态
+	gray := image.NewGray(img.Bounds())
+	draw.Draw(gray, gray.Bounds(), img, img.Bounds().Min, draw.Src)
+	pausedIcon, err := walk.NewIconFromImage(gray)
+	if err != nil {
+		fatal(err)
+	}
+
 	ni, err := walk.NewNotifyIcon(mw)
 	if err != nil {
 		fatal(err)
@@ -159,8 +170,14 @@ func main() {
 	}
 
 	applyPauseState := func() {
-		hook.SetPaused(effectivePaused())
+		paused := effectivePaused()
+		hook.SetPaused(paused)
 		_ = pauseAction.SetChecked(userPaused)
+		if paused {
+			_ = ni.SetIcon(pausedIcon)
+		} else {
+			_ = ni.SetIcon(icon)
+		}
 		updateTip()
 	}
 
@@ -319,17 +336,36 @@ func main() {
 		fatal(err)
 	}
 
-	// 打开拦截日志
+	// 查看拦截日志（内置窗口）
 	logAction := walk.NewAction()
-	if err := logAction.SetText("打开日志"); err != nil {
+	if err := logAction.SetText("查看日志"); err != nil {
 		fatal(err)
 	}
-	logAction.Triggered().Attach(func() {
-		if err := logging.Open(); err != nil {
-			walk.MsgBox(mw, "打开日志失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+	logAction.Triggered().Attach(func() { showLogView(mw) })
+	if err := ni.ContextMenu().Actions().Add(logAction); err != nil {
+		fatal(err)
+	}
+
+	// 在资源管理器中定位配置文件
+	cfgLocAction := walk.NewAction()
+	if err := cfgLocAction.SetText("配置文件位置"); err != nil {
+		fatal(err)
+	}
+	cfgLocAction.Triggered().Attach(func() {
+		path, err := config.Path()
+		if err != nil {
+			walk.MsgBox(mw, "定位配置文件失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+			return
+		}
+		target := path
+		if _, statErr := os.Stat(path); statErr != nil {
+			target = filepath.Dir(path)
+		}
+		if err := windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(target), nil, nil, windows.SW_SHOWNORMAL); err != nil {
+			walk.MsgBox(mw, "定位配置文件失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
 		}
 	})
-	if err := ni.ContextMenu().Actions().Add(logAction); err != nil {
+	if err := ni.ContextMenu().Actions().Add(cfgLocAction); err != nil {
 		fatal(err)
 	}
 
@@ -368,7 +404,7 @@ func main() {
 
 	syncMenu()
 	hook.SetDebounce(time.Duration(cfg.DebounceMS) * time.Millisecond)
-	hook.SetPaused(effectivePaused())
+	applyPauseState()
 
 	if err := ni.ShowInfo("右键图标设置", "右键图标可设置防抖阈值、目标键盘或退出"); err != nil {
 		fatal(err)
