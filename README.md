@@ -79,7 +79,17 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 
 但拦截本身仍是**对所有键盘生效**的：Windows 的低级键盘钩子（`WH_KEYBOARD_LL`）回调里没有设备标识，纯用户态程序无法判断按键来自哪把键盘。若确实需要只对指定设备生效，只能安装内核过滤驱动（如 Interception），代价是需要管理员权限、驱动签名，并会失去免安装单文件的分发方式。
 
+## 平台支持
+
+目前仅 Windows 完整可用。平台相关代码（键盘钩子、设备枚举、开机自启、单实例、按键名解析）已拆到各自的 `_windows.go`，其他平台提供占位实现，因此 `internal` 各包在 Linux / macOS 下可以正常编译，便于后续按平台补齐：
+
+* macOS：`CGEventTap` 钩子（需「辅助功能」授权）、IOKit 设备识别、LaunchAgent 自启
+* Linux：X11 全局钩子（Wayland 下合成器不提供拦截接口）、`/dev/input` 设备识别、XDG autostart；建议采用无托盘 + 配置文件的形式
+* 界面层（walk 托盘与日志窗口）仍是 Windows 专有，非 Windows 需要另写界面
+
 ## 更新记录
+
+* 2026年11月：平台相关模块按构建标签拆分，非 Windows 平台提供占位实现，为后续移植预留接口
 
 * 2026年11月：暂停时图标变灰，新增内置日志窗口与「配置文件位置」，加入 GitHub Actions 自动构建与发布
 

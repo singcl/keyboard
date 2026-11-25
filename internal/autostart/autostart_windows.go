@@ -1,3 +1,5 @@
+//go:build windows
+
 // Package autostart 通过 HKCU 的 Run 键管理开机自启。
 package autostart
 

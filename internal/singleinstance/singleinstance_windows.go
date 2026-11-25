@@ -1,3 +1,5 @@
+//go:build windows
+
 // Package singleinstance 通过命名互斥量保证同一时间只运行一个程序实例。
 package singleinstance
 
