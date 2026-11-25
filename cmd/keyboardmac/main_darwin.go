@@ -210,7 +210,7 @@ func goOpenLog() {
 		showAlert("暂无日志", "目前还没有拦截记录。")
 		return
 	}
-	if err := exec.Command("open", path).Start(); err != nil {
+	if err := exec.Command("/usr/bin/open", path).Start(); err != nil {
 		showAlert("打开日志失败", err.Error())
 	}
 }
@@ -222,7 +222,7 @@ func goRevealConfig() {
 		showAlert("定位配置文件失败", err.Error())
 		return
 	}
-	if err := exec.Command("open", "-R", path).Start(); err != nil {
+	if err := exec.Command("/usr/bin/open", "-R", path).Start(); err != nil {
 		showAlert("定位配置文件失败", err.Error())
 	}
 }
