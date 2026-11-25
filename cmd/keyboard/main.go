@@ -39,8 +39,23 @@ func main() {
 	defer release()
 
 	cfg := config.Load()
-	debounceMS := cfg.DebounceMS
-	paused := false
+	userPaused := false
+	targetOnline := true
+
+	targetConfigured := func() bool {
+		return cfg.TargetName != "" || cfg.TargetPath != ""
+	}
+	if cfg.OnlyWhenConnected && targetConfigured() {
+		targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
+	}
+
+	saveCfg := func() {
+		_ = config.Save(cfg)
+	}
+
+	effectivePaused := func() bool {
+		return userPaused || (cfg.OnlyWhenConnected && targetConfigured() && !targetOnline)
+	}
 
 	mw, err := walk.NewMainWindow()
 	if err != nil {
@@ -70,24 +85,27 @@ func main() {
 
 	updateTip := func() {
 		state := "运行中"
-		if paused {
+		switch {
+		case userPaused:
 			state = "已暂停"
+		case cfg.OnlyWhenConnected && targetConfigured() && !targetOnline:
+			state = "已暂停（目标键盘未连接）"
 		}
-		_ = ni.SetToolTip(fmt.Sprintf("键盘防抖 %dms · %s", debounceMS, state))
+		_ = ni.SetToolTip(fmt.Sprintf("键盘防抖 %dms · %s", cfg.DebounceMS, state))
 	}
 
 	syncMenu := func() {
 		for m, a := range actions {
-			_ = a.SetChecked(m == debounceMS)
+			_ = a.SetChecked(m == cfg.DebounceMS)
 		}
 		updateTip()
 	}
 
 	applyDebounce := func(ms int) {
-		debounceMS = ms
+		cfg.DebounceMS = ms
 		hook.SetDebounce(time.Duration(ms) * time.Millisecond)
 		syncMenu()
-		_ = config.Save(config.Config{DebounceMS: ms})
+		saveCfg()
 	}
 
 	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
@@ -108,16 +126,21 @@ func main() {
 		fatal(err)
 	}
 
-	// 暂停/恢复防抖，勾选表示当前处于暂停状态
+	// 暂停/恢复防抖，勾选表示手动暂停
 	pauseAction := walk.NewAction()
 	if err := pauseAction.SetText("暂停防抖"); err != nil {
 		fatal(err)
 	}
-	pauseAction.Triggered().Attach(func() {
-		paused = !paused
-		hook.SetPaused(paused)
-		_ = pauseAction.SetChecked(paused)
+
+	applyPauseState := func() {
+		hook.SetPaused(effectivePaused())
+		_ = pauseAction.SetChecked(userPaused)
 		updateTip()
+	}
+
+	pauseAction.Triggered().Attach(func() {
+		userPaused = !userPaused
+		applyPauseState()
 	})
 	if err := ni.ContextMenu().Actions().Add(pauseAction); err != nil {
 		fatal(err)
@@ -172,6 +195,87 @@ func main() {
 		fatal(err)
 	}
 
+	// 仅当目标键盘在线时才启用防抖（拦截本身仍是全局的）
+	gateAction := walk.NewAction()
+	if err := gateAction.SetText("仅目标键盘在线时防抖"); err != nil {
+		fatal(err)
+	}
+	_ = gateAction.SetChecked(cfg.OnlyWhenConnected)
+	gateAction.Triggered().Attach(func() {
+		enable := !cfg.OnlyWhenConnected
+		if enable && !targetConfigured() {
+			_ = gateAction.SetChecked(false)
+			walk.MsgBox(mw, "未设置目标键盘",
+				"请先在「目标键盘」子菜单中选择要匹配的设备。", walk.MsgBoxOK|walk.MsgBoxIconInformation)
+			return
+		}
+		cfg.OnlyWhenConnected = enable
+		targetOnline = true
+		if enable {
+			targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
+		}
+		_ = gateAction.SetChecked(enable)
+		saveCfg()
+		applyPauseState()
+	})
+	if err := ni.ContextMenu().Actions().Add(gateAction); err != nil {
+		fatal(err)
+	}
+
+	// 目标键盘子菜单：列出当前设备，点击即设为匹配目标
+	targetMenu, err := walk.NewMenu()
+	if err != nil {
+		fatal(err)
+	}
+	targetMenuAction, err := ni.ContextMenu().Actions().AddMenu(targetMenu)
+	if err != nil {
+		fatal(err)
+	}
+	if err := targetMenuAction.SetText("目标键盘"); err != nil {
+		fatal(err)
+	}
+
+	var rebuildTargetMenu func()
+	rebuildTargetMenu = func() {
+		_ = targetMenu.Actions().Clear()
+
+		list, err := devices.List()
+		if err != nil {
+			return
+		}
+		for _, d := range list {
+			d := d
+			action := walk.NewAction()
+			text := d.DisplayName()
+			if d.VID != "" {
+				text += fmt.Sprintf("（VID_%s / PID_%s）", d.VID, d.PID)
+			}
+			_ = action.SetText(text)
+			_ = action.SetChecked(d.Matches(cfg.TargetName, cfg.TargetPath))
+			action.Triggered().Attach(func() {
+				cfg.TargetName = d.Name
+				cfg.TargetPath = d.Path
+				targetOnline = true
+				if cfg.OnlyWhenConnected {
+					targetOnline = devices.Online(cfg.TargetName, cfg.TargetPath)
+				}
+				saveCfg()
+				applyPauseState()
+				rebuildTargetMenu()
+			})
+			_ = targetMenu.Actions().Add(action)
+		}
+
+		if err := targetMenu.Actions().Add(walk.NewSeparatorAction()); err != nil {
+			return
+		}
+		refresh := walk.NewAction()
+		_ = refresh.SetText("刷新列表")
+		refresh.Triggered().Attach(rebuildTargetMenu)
+		_ = targetMenu.Actions().Add(refresh)
+	}
+	rebuildTargetMenu()
+
 	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
 		fatal(err)
 	}
@@ -224,13 +328,39 @@ func main() {
 	ni.SetVisible(true)
 
 	syncMenu()
-	hook.SetDebounce(time.Duration(debounceMS) * time.Millisecond)
+	hook.SetDebounce(time.Duration(cfg.DebounceMS) * time.Millisecond)
+	hook.SetPaused(effectivePaused())
 
-	if err := ni.ShowInfo("右键图标设置", "右键图标可设置防抖阈值（默认 100ms）或退出"); err != nil {
+	if err := ni.ShowInfo("右键图标设置", "右键图标可设置防抖阈值、目标键盘或退出"); err != nil {
 		fatal(err)
 	}
 
 	go hook.Setup(logging.Blocked)
+
+	// 定时检测目标键盘是否在线，自动暂停或恢复拦截
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			var enabled bool
+			var name, path string
+			mw.Synchronize(func() {
+				enabled = cfg.OnlyWhenConnected
+				name, path = cfg.TargetName, cfg.TargetPath
+			})
+			if !enabled || (name == "" && path == "") {
+				continue
+			}
+
+			online := devices.Online(name, path)
+			mw.Synchronize(func() {
+				if online != targetOnline {
+					targetOnline = online
+					applyPauseState()
+				}
+			})
+		}
+	}()
 
 	// Run the message loop.
 	mw.Run()

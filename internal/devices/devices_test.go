@@ -20,6 +20,19 @@ func TestParseIDs(t *testing.T) {
 	}
 }
 
+func TestMatches(t *testing.T) {
+	d := Device{Name: "LANGTU BT5.0_3", Path: `\\?\HID#VID_046D&PID_B34C`}
+	if !d.Matches("LANGTU BT5.0_3", "") {
+		t.Error("按名称应匹配")
+	}
+	if !d.Matches("", `\\?\HID#VID_046D&PID_B34C`) {
+		t.Error("按路径应匹配")
+	}
+	if d.Matches("其他键盘", "") {
+		t.Error("不同名称不应匹配")
+	}
+}
+
 func TestList(t *testing.T) {
 	list, err := List()
 	if err != nil {

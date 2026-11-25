@@ -13,6 +13,13 @@ const DefaultDebounceMS = 100
 // Config 是持久化的程序配置。
 type Config struct {
 	DebounceMS int `json:"debounce_ms"`
+
+	// 目标键盘：名称或设备路径匹配任一即可
+	TargetName string `json:"target_name"`
+	TargetPath string `json:"target_path"`
+
+	// OnlyWhenConnected 为 true 时，仅当目标键盘在线才启用防抖
+	OnlyWhenConnected bool `json:"only_when_connected"`
 }
 
 // Path 返回配置文件路径，并确保所在目录存在。

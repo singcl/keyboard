@@ -17,6 +17,9 @@ const (
 
 	devPropTypeString = 0x00000012
 	crBufferSmall     = 0x1A
+
+	cmLocateDevNodeNormal = 0
+	maxParentDepth        = 5
 )
 
 var (
@@ -28,6 +31,9 @@ var (
 	procGetRawInputDeviceInfo        = user32.NewProc("GetRawInputDeviceInfoW")
 	procHidDGetProductString         = hidDLL.NewProc("HidD_GetProductString")
 	procCMGetDeviceInterfaceProperty = cfgmgr32.NewProc("CM_Get_Device_Interface_PropertyW")
+	procCMLocateDevNode              = cfgmgr32.NewProc("CM_Locate_DevNodeW")
+	procCMGetParent                  = cfgmgr32.NewProc("CM_Get_Parent")
+	procCMGetDevNodeProperty         = cfgmgr32.NewProc("CM_Get_DevNode_PropertyW")
 
 	// DEVPKEY_Device_FriendlyName
 	devPropKeyFriendlyName = devPropKey{
@@ -38,6 +44,44 @@ var (
 			Data4: [8]byte{0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0},
 		},
 		PID: 14,
+	}
+
+	// DEVPKEY_Device_InstanceId
+	devPropKeyInstanceID = devPropKey{
+		FmtID: windows.GUID{
+			Data1: 0x78c34fc8,
+			Data2: 0x104a,
+			Data3: 0x4aca,
+			Data4: [8]byte{0x9e, 0xa4, 0x52, 0x4d, 0x52, 0x99, 0x6e, 0x57},
+		},
+		PID: 256,
+	}
+
+	// DEVPKEY_Device_BusReportedDeviceDesc
+	devPropKeyBusReportedDesc = devPropKey{
+		FmtID: windows.GUID{
+			Data1: 0x540b947e,
+			Data2: 0x8b40,
+			Data3: 0x45bc,
+			Data4: [8]byte{0xa8, 0xa2, 0x6a, 0x0b, 0x89, 0x4c, 0xbd, 0xa2},
+		},
+		PID: 4,
+	}
+
+	// 这些名称过于笼统，不能代表具体型号
+	genericNames = []string{
+		"hid-compliant",
+		"符合 hid",
+		"hid keyboard",
+		"hid 键盘",
+		"bluetooth le",
+		"蓝牙 le",
+		"usb 输入设备",
+		"usb input device",
+		"usb composite device",
+		"usb 复合设备",
+		"pci to isa",
+		"pci 到 isa 桥",
 	}
 
 	vendors = map[string]string{
@@ -88,6 +132,28 @@ func (d Device) DisplayName() string {
 	return shortName(d.Path)
 }
 
+// Matches 判断设备是否与指定目标匹配：路径或名称一致即可。
+func (d Device) Matches(name, path string) bool {
+	if path != "" && d.Path == path {
+		return true
+	}
+	return name != "" && d.Name == name
+}
+
+// Online 判断目标键盘当前是否在线；name 与 path 任一为空则不参与匹配。
+func Online(name, path string) bool {
+	list, err := List()
+	if err != nil {
+		return false
+	}
+	for _, d := range list {
+		if d.Matches(name, path) {
+			return true
+		}
+	}
+	return false
+}
+
 // List 枚举当前系统中的键盘设备。
 func List() ([]Device, error) {
 	var count uint32
@@ -117,8 +183,12 @@ func List() ([]Device, error) {
 			continue
 		}
 		name := friendlyName(path)
-		if name == "" {
-			name = productName(path)
+		if name == "" || isGenericName(name) {
+			if p := productName(path); p != "" && !isGenericName(p) {
+				name = p
+			} else {
+				name = ""
+			}
 		}
 		vid, pid := parseIDs(path)
 		result = append(result, Device{
@@ -149,22 +219,115 @@ func deviceName(h windows.Handle) (string, error) {
 	return windows.UTF16ToString(buf), nil
 }
 
-// friendlyName 通过设备属性读取友好名，失败时返回空字符串。
+// friendlyName 依次从接口、设备节点及其父节点读取名称，优先返回具体型号名。
 func friendlyName(path string) string {
+	var candidates []string
+
+	if n := interfaceStringProp(path, &devPropKeyFriendlyName); n != "" {
+		candidates = append(candidates, n)
+	}
+
+	instanceID := interfaceStringProp(path, &devPropKeyInstanceID)
+	if devInst, ok := locateDevNode(instanceID); ok {
+		for depth := 0; depth < maxParentDepth; depth++ {
+			if n := devNodeStringProp(devInst, &devPropKeyBusReportedDesc); n != "" {
+				candidates = append(candidates, n)
+			}
+			if n := devNodeStringProp(devInst, &devPropKeyFriendlyName); n != "" {
+				candidates = append(candidates, n)
+			}
+			parent, ok := parentDevNode(devInst)
+			if !ok {
+				break
+			}
+			devInst = parent
+		}
+	}
+
+	for _, n := range candidates {
+		if !isGenericName(n) {
+			return n
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return ""
+}
+
+func isGenericName(name string) bool {
+	lower := strings.ToLower(name)
+	for _, g := range genericNames {
+		if strings.Contains(lower, g) {
+			return true
+		}
+	}
+	return false
+}
+
+func locateDevNode(instanceID string) (uint32, bool) {
+	if instanceID == "" {
+		return 0, false
+	}
+	ptr, err := windows.UTF16PtrFromString(instanceID)
+	if err != nil {
+		return 0, false
+	}
+
+	var devInst uint32
+	r, _, _ := procCMLocateDevNode.Call(uintptr(unsafe.Pointer(&devInst)),
+		uintptr(unsafe.Pointer(ptr)), cmLocateDevNodeNormal)
+	if r != 0 {
+		return 0, false
+	}
+	return devInst, true
+}
+
+func parentDevNode(devInst uint32) (uint32, bool) {
+	var parent uint32
+	r, _, _ := procCMGetParent.Call(uintptr(unsafe.Pointer(&parent)), uintptr(devInst), 0)
+	if r != 0 {
+		return 0, false
+	}
+	return parent, true
+}
+
+func interfaceStringProp(path string, key *devPropKey) string {
 	ptr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return ""
 	}
+	return readStringProp(func(buf, size, propType uintptr) uintptr {
+		r, _, _ := procCMGetDeviceInterfaceProperty.Call(
+			uintptr(unsafe.Pointer(ptr)),
+			uintptr(unsafe.Pointer(key)),
+			propType,
+			buf,
+			size,
+			0,
+		)
+		return r
+	})
+}
 
+func devNodeStringProp(devInst uint32, key *devPropKey) string {
+	return readStringProp(func(buf, size, propType uintptr) uintptr {
+		r, _, _ := procCMGetDevNodeProperty.Call(
+			uintptr(devInst),
+			uintptr(unsafe.Pointer(key)),
+			propType,
+			buf,
+			size,
+			0,
+		)
+		return r
+	})
+}
+
+// readStringProp 调用一次查询取长度，再取内容。
+func readStringProp(query func(buf, size, propType uintptr) uintptr) string {
 	var propType, size uint32
-	r, _, _ := procCMGetDeviceInterfaceProperty.Call(
-		uintptr(unsafe.Pointer(ptr)),
-		uintptr(unsafe.Pointer(&devPropKeyFriendlyName)),
-		uintptr(unsafe.Pointer(&propType)),
-		0,
-		uintptr(unsafe.Pointer(&size)),
-		0,
-	)
+	r := query(0, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&propType)))
 	if r != 0 && r != crBufferSmall {
 		return ""
 	}
@@ -173,14 +336,8 @@ func friendlyName(path string) string {
 	}
 
 	buf := make([]byte, size)
-	r, _, _ = procCMGetDeviceInterfaceProperty.Call(
-		uintptr(unsafe.Pointer(ptr)),
-		uintptr(unsafe.Pointer(&devPropKeyFriendlyName)),
-		uintptr(unsafe.Pointer(&propType)),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&size)),
-		0,
-	)
+	r = query(uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&propType)))
 	if r != 0 || propType != devPropTypeString {
 		return ""
 	}
