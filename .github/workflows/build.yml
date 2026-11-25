@@ -11,6 +11,26 @@ permissions:
   contents: write
 
 jobs:
+  # Linux / macOS 目前只有平台无关的内部包，没有可用的程序入口，
+  # 因此这里只做编译与静态检查，不产出发布包。
+  cross-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile check (linux/darwin)
+        run: |
+          for os in linux darwin; do
+            echo "== $os =="
+            GOOS=$os CGO_ENABLED=0 go build ./internal/...
+            GOOS=$os CGO_ENABLED=0 go vet ./internal/...
+          done
+
   build:
     runs-on: windows-latest
     steps:

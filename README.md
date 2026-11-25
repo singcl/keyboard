@@ -57,7 +57,7 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 │   └── singleinstance/        # 单实例互斥量
 ├── winres/
 │   └── winres.json            # 图标、清单与版本信息资源定义
-├── .github/workflows/build.yml # CI：自动构建并打包发布
+├── .github/workflows/build.yml # CI：Windows 构建发布，Linux/macOS 仅编译验证
 ├── build.bat / build.sh       # 本地构建脚本
 ├── go.mod
 └── README.md
