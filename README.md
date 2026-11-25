@@ -76,7 +76,7 @@ lipo -create -output keyboard keyboard-arm64 keyboard-amd64
 │   └── singleinstance/        # 单实例（互斥量 / 文件锁）
 ├── winres/
 │   └── winres.json            # 图标、清单与版本信息资源定义
-├── .github/workflows/build.yml # CI：Windows / macOS 构建发布，Linux 仅编译验证
+├── .github/workflows/build.yml # CI：Windows / macOS 构建与发布
 ├── build.bat / build.sh       # 本地构建脚本
 ├── go.mod
 └── README.md
@@ -100,7 +100,7 @@ lipo -create -output keyboard keyboard-arm64 keyboard-amd64
 
 ## 平台支持
 
-目前 Windows 与 macOS 都已完整可用，Linux 尚未提供界面与拦截实现。
+目前支持 Windows 与 macOS，其他平台（如 Linux）不在支持计划内。
 
 macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15+：
 
@@ -110,8 +110,6 @@ macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15
 * 日志与配置文件位于 `~/Library/Caches/keyboard/`。
 
 平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `_windows.go` / `_darwin.go` 拆分，Windows 部分仍是纯 Go；macOS 的界面与事件监听通过 cgo 调用 Cocoa / CoreGraphics。
-
-Linux 尚未实现：X11 下可以用全局钩子实现拦截（Wayland 下合成器不提供拦截接口），界面需要另写。
 
 ## 更新记录
 
