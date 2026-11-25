@@ -18,6 +18,22 @@
 
 下载地址：https://github.com/garfeng/keyboard/releases/latest
 
+## 构建
+
+需要 Go 1.18+，项目无 cgo 依赖，在 Windows 下执行：
+
+```
+CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui"
+```
+
+产物为当前目录下的 `keyboard.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
+
+如果修改了 `icon.ico` 或 `keyboard.manifest`，需要重新生成资源文件后再编译：
+
+```
+go run github.com/akavel/rsrc@latest -manifest keyboard.manifest -ico icon.ico -o rsrc.syso -arch amd64
+```
+
 ## 日志
 
 * 2022年9月28日：加系统托盘图标
