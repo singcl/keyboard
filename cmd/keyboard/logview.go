@@ -87,11 +87,35 @@ func newLogView() (*logView, error) {
 		mw.Dispose()
 		return nil, err
 	}
-	buttons.SetLayout(walk.NewHBoxLayout())
+	buttonLayout := walk.NewHBoxLayout()
+	_ = buttonLayout.SetMargins(walk.Margins{})
+	buttons.SetLayout(buttonLayout)
+
+	// 按钮使用对话框标准尺寸，不随窗口拉伸
+	btnSize := walk.SizeFrom96DPI(walk.Size{Width: 75, Height: 25}, mw.DPI())
+	if err := buttons.SetMinMaxSize(walk.Size{Height: btnSize.Height},
+		walk.Size{Width: 16777215, Height: btnSize.Height}); err != nil {
+		mw.Dispose()
+		return nil, err
+	}
+
+	// 左侧放一个可伸展的空白占位，把按钮推到右边
+	spacer, err := walk.NewComposite(buttons)
+	if err != nil {
+		mw.Dispose()
+		return nil, err
+	}
+	if err := buttonLayout.SetStretchFactor(spacer, 1); err != nil {
+		mw.Dispose()
+		return nil, err
+	}
 
 	addButton := func(title string, onClick func()) {
 		b, err := walk.NewPushButton(buttons)
 		if err != nil {
+			return
+		}
+		if err := b.SetMinMaxSize(btnSize, btnSize); err != nil {
 			return
 		}
 		b.SetText(title)
