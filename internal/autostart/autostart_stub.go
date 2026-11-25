@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 // Package autostart 管理开机自启，具体实现按平台拆分。
 package autostart

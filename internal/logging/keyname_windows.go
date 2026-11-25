@@ -15,7 +15,7 @@ var (
 )
 
 // keyName 通过扫描码获取可读的按键名称，失败时返回空字符串。
-func keyName(scanCode uint32, extended bool) string {
+func keyName(vk, scanCode uint32, extended bool) string {
 	lparam := int32(scanCode << 16)
 	if extended {
 		lparam |= 1 << 24

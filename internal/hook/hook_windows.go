@@ -3,6 +3,7 @@
 package hook
 
 import (
+	"fmt"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -61,7 +62,7 @@ type msg struct {
 
 // Setup 安装钩子并在当前 goroutine 上跑消息循环，正常情况下不会返回。
 // handler 可为 nil；低级键盘钩子要求安装它的线程必须有消息循环，因此内部会 LockOSThread。
-func Setup(handler BlockHandler) {
+func Setup(handler BlockHandler) error {
 	if handler == nil {
 		handler = func(uint32, uint32, bool, time.Duration) {}
 	}
@@ -75,7 +76,7 @@ func Setup(handler BlockHandler) {
 		text, _ := windows.UTF16PtrFromString("Failed to install hook: " + err.Error())
 		caption, _ := windows.UTF16PtrFromString("Error")
 		procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(caption)), mbIconError)
-		return
+		return fmt.Errorf("hook: 安装键盘钩子失败：%w", err)
 	}
 	hookHandle = h
 	defer procUnhookWindowsHookEx.Call(hookHandle)
@@ -84,7 +85,7 @@ func Setup(handler BlockHandler) {
 	for {
 		ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
 		if int32(ret) <= 0 {
-			return
+			return nil
 		}
 	}
 }

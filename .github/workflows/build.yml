@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 jobs:
-  # Linux / macOS 目前只有平台无关的内部包，没有可用的程序入口，
-  # 因此这里只做编译与静态检查，不产出发布包。
+  # Linux 目前只有平台无关的内部包，没有可用的程序入口，
+  # 因此这里只做编译与静态检查，不产出发布包；macOS 已有独立任务。
   cross-compile:
     runs-on: ubuntu-latest
     steps:
@@ -23,13 +23,56 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Compile check (linux/darwin)
+      - name: Compile check (linux)
         run: |
-          for os in linux darwin; do
-            echo "== $os =="
-            GOOS=$os CGO_ENABLED=0 go build ./internal/...
-            GOOS=$os CGO_ENABLED=0 go vet ./internal/...
+          GOOS=linux CGO_ENABLED=0 go build ./internal/...
+          GOOS=linux CGO_ENABLED=0 go vet ./internal/...
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+        env:
+          CGO_ENABLED: "1"
+
+      # 打 tag 时用 tag 号作为程序内显示的版本，其余情况显示 dev-<commit>
+      - name: Build universal binary
+        run: |
+          if [[ "${{ github.ref_name }}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          mkdir -p dist
+          for arch in arm64 amd64; do
+            CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s -X main.appVersion=$VERSION" \
+              -o dist/keyboard-$arch ./cmd/keyboardmac
           done
+          lipo -create -output dist/keyboard dist/keyboard-arm64 dist/keyboard-amd64
+          chmod +x dist/keyboard
+          cd dist && zip keyboard-macos-universal.zip keyboard
+        env:
+          CGO_ENABLED: "1"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-macos-universal
+          path: dist/keyboard-macos-universal.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/keyboard-macos-universal.zip
+          generate_release_notes: true
 
   build:
     runs-on: windows-latest

@@ -16,11 +16,13 @@
 
 托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、选择目标键盘、查看/清空日志、定位配置文件。暂停时托盘图标会变灰，菜单第一行也会显示当前状态。开启「开机自启」后就不需要每次手动双击了。
 
+macOS 版本下载后直接运行 `keyboard`，图标出现在菜单栏。首次运行需要在「系统设置 → 隐私与安全性 → 输入监控」中勾选本程序（听不到按键时请看这一项），之后重新启动即可生效。菜单里同样可以设置防抖阈值、暂停拦截、开机自启、打开日志与配置文件；macOS 目前只做全局拦截，没有「目标键盘」相关选项。
+
 下载地址：https://github.com/singcl/keyboard/releases/latest
 
 ## 构建
 
-需要 Go 1.22+，项目无 cgo 依赖，在 Windows 下执行：
+Windows 需要 Go 1.22+，项目无 cgo 依赖，在 Windows 下执行：
 
 ```
 build.bat      # Windows cmd / PowerShell
@@ -41,23 +43,40 @@ CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyb
 go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd/keyboard/rsrc.syso --arch amd64 --no-suffix
 ```
 
+macOS 版本使用 cgo（Cocoa + CoreGraphics），需要 Xcode 命令行工具：
+
+```
+CGO_ENABLED=1 go build -ldflags "-w -s" -o keyboard ./cmd/keyboardmac
+```
+
+同时支持 Apple Silicon 与 Intel 的通用二进制：
+
+```
+for arch in arm64 amd64; do
+  CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s" -o keyboard-$arch ./cmd/keyboardmac
+done
+lipo -create -output keyboard keyboard-arm64 keyboard-amd64
+```
+
 ## 项目结构
 
 ```
 .
-├── cmd/keyboard/              # 程序入口：托盘图标、菜单
-│   └── rsrc.syso              # 图标、清单与版本信息（go-winres 生成）
+├── cmd/
+│   ├── keyboard/              # Windows 入口：托盘图标、菜单（walk）
+│   │   └── rsrc.syso          # 图标、清单与版本信息（go-winres 生成）
+│   └── keyboardmac/           # macOS 入口：菜单栏图标（Cocoa）与 Go 桥接
 ├── internal/
 │   ├── assets/                # 图标与清单；icon.png 通过 go:embed 编入程序
-│   ├── autostart/             # 开机自启（注册表 Run 键）
+│   ├── autostart/             # 开机自启（注册表 Run 键 / LaunchAgent）
 │   ├── config/                # 配置持久化（防抖阈值、目标键盘）
 │   ├── devices/               # 键盘设备识别（Raw Input）
-│   ├── hook/                  # Win32 低级键盘钩子与拦截逻辑
+│   ├── hook/                  # 键盘拦截（Win32 低级钩子 / CGEventTap）与判重逻辑
 │   ├── logging/               # 拦截日志（异步写入、轮转、清空）
-│   └── singleinstance/        # 单实例互斥量
+│   └── singleinstance/        # 单实例（互斥量 / 文件锁）
 ├── winres/
 │   └── winres.json            # 图标、清单与版本信息资源定义
-├── .github/workflows/build.yml # CI：Windows 构建发布，Linux/macOS 仅编译验证
+├── .github/workflows/build.yml # CI：Windows / macOS 构建发布，Linux 仅编译验证
 ├── build.bat / build.sh       # 本地构建脚本
 ├── go.mod
 └── README.md
@@ -65,7 +84,7 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 
 ## 拦截日志
 
-被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，托盘右键「查看日志」会在内置窗口里显示最后 500 行并每 2 秒自动刷新，「清空日志」可删除；「配置文件位置」会在资源管理器中定位 `config.json`。
+被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`（macOS 为 `~/Library/Caches/keyboard/keyboard.log`），托盘右键「查看日志」会在内置窗口里显示最后 500 行并每 2 秒自动刷新，「清空日志」可删除；「配置文件位置」会在资源管理器中定位 `config.json`。
 
 注意：日志包含被拦截按键的名称和键码，属于输入信息，分享或反馈问题前请先清空或自行删改。
 
@@ -81,13 +100,22 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 
 ## 平台支持
 
-目前仅 Windows 完整可用。平台相关代码（键盘钩子、设备枚举、开机自启、单实例、按键名解析）已拆到各自的 `_windows.go`，其他平台提供占位实现，因此 `internal` 各包在 Linux / macOS 下可以正常编译，便于后续按平台补齐：
+目前 Windows 与 macOS 都已完整可用，Linux 尚未提供界面与拦截实现。
 
-* macOS：`CGEventTap` 钩子（需「辅助功能」授权）、IOKit 设备识别、LaunchAgent 自启
-* Linux：X11 全局钩子（Wayland 下合成器不提供拦截接口）、`/dev/input` 设备识别、XDG autostart；建议采用无托盘 + 配置文件的形式
-* 界面层（walk 托盘与日志窗口）仍是 Windows 专有，非 Windows 需要另写界面
+macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15+：
+
+* 首次运行会请求「输入监控」权限，授权后需要重新启动程序；菜单第一行显示「未生效（缺少权限）」时说明没有授权。
+* 与 Windows 一样，事件回调里拿不到设备标识，因此只有全局拦截，没有「目标键盘 / 仅目标键盘在线时防抖」选项。
+* 开机自启写入 `~/Library/LaunchAgents/com.singcl.keyboard.plist`，下次登录时生效；取消勾选会删除该文件。
+* 日志与配置文件位于 `~/Library/Caches/keyboard/`。
+
+平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `_windows.go` / `_darwin.go` 拆分，Windows 部分仍是纯 Go；macOS 的界面与事件监听通过 cgo 调用 Cocoa / CoreGraphics。
+
+Linux 尚未实现：X11 下可以用全局钩子实现拦截（Wayland 下合成器不提供拦截接口），界面需要另写。
 
 ## 更新记录
+
+* 2026年11月：新增 macOS 版本：菜单栏图标、CGEventTap 全局拦截、LaunchAgent 开机自启
 
 * 2026年11月：平台相关模块按构建标签拆分，非 Windows 平台提供占位实现，为后续移植预留接口
 

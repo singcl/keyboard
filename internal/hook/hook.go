@@ -4,7 +4,8 @@
 // 如果抬起后又在很短时间内被重新按下，说明是键盘误触发的重复响应，直接拦截。
 //
 // 拦截能力由各平台实现提供：Windows 见 hook_windows.go（低级键盘钩子），
-// 其他平台目前为占位实现。判重逻辑（ShouldBlock）与防抖/暂停状态是平台无关的。
+// macOS 见 hook_darwin.go（CGEventTap），其他平台目前为占位实现。
+// 判重逻辑（ShouldBlock）与防抖/暂停状态是平台无关的。
 package hook
 
 import (

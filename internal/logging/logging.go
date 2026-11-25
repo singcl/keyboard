@@ -97,7 +97,7 @@ func write(e event) {
 		return
 	}
 
-	name := keyName(e.scanCode, e.extended)
+	name := keyName(e.vk, e.scanCode, e.extended)
 	if name == "" {
 		name = "-"
 	}
