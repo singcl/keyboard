@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -61,6 +62,10 @@ func main() {
 
 	userPaused := cfg.Paused
 	targetOnline := true
+
+	// 今日拦截计数：钩子线程累加，UI 线程读取
+	var blockedToday int64
+	var blockedDate atomic.Value
 
 	targetConfigured := func() bool {
 		return cfg.TargetName != "" || cfg.TargetPath != ""
@@ -130,13 +135,26 @@ func main() {
 		case cfg.OnlyWhenConnected && targetConfigured() && !targetOnline:
 			state = "已暂停（目标键盘未连接）"
 		}
-		_ = statusAction.SetText("状态：" + state)
+		text := "状态：" + state
+		if n := atomic.LoadInt64(&blockedToday); n > 0 {
+			text += fmt.Sprintf(" · 今日拦截 %d 次", n)
+		}
+		_ = statusAction.SetText(text)
 		_ = ni.SetToolTip(fmt.Sprintf("键盘防抖 %dms · %s", cfg.DebounceMS, state))
 	}
 
+	var customAction *walk.Action
+
 	syncMenu := func() {
+		custom := true
 		for m, a := range actions {
 			_ = a.SetChecked(m == cfg.DebounceMS)
+			if m == cfg.DebounceMS {
+				custom = false
+			}
+		}
+		if customAction != nil {
+			_ = customAction.SetChecked(custom)
 		}
 		updateTip()
 	}
@@ -159,6 +177,20 @@ func main() {
 			fatal(err)
 		}
 		actions[ms] = action
+	}
+
+	// 自定义阈值：弹出输入框，允许 10-1000 毫秒
+	customAction = walk.NewAction()
+	if err := customAction.SetText("自定义阈值…"); err != nil {
+		fatal(err)
+	}
+	customAction.Triggered().Attach(func() {
+		if ms, ok := askDebounce(mw, cfg.DebounceMS); ok {
+			applyDebounce(ms)
+		}
+	})
+	if err := ni.ContextMenu().Actions().Add(customAction); err != nil {
+		fatal(err)
 	}
 
 	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
@@ -394,6 +426,17 @@ func main() {
 		fatal(err)
 	}
 
+	versionAction := walk.NewAction()
+	if err := versionAction.SetText("版本 v" + appVersion()); err != nil {
+		fatal(err)
+	}
+	if err := versionAction.SetEnabled(false); err != nil {
+		fatal(err)
+	}
+	if err := ni.ContextMenu().Actions().Add(versionAction); err != nil {
+		fatal(err)
+	}
+
 	exitAction := walk.NewAction()
 	if err := exitAction.SetText("退出"); err != nil {
 		fatal(err)
@@ -413,13 +456,25 @@ func main() {
 		fatal(err)
 	}
 
-	go hook.Setup(logging.Blocked)
+	// 统计今日拦截次数，同时写入拦截日志
+	countBlock := func(vk, scanCode uint32, extended bool, interval time.Duration) {
+		day := time.Now().Format("2006-01-02")
+		if prev, _ := blockedDate.Load().(string); prev != day {
+			blockedDate.Store(day)
+			atomic.StoreInt64(&blockedToday, 0)
+		}
+		atomic.AddInt64(&blockedToday, 1)
+		logging.Blocked(vk, scanCode, extended, interval)
+	}
+	go hook.Setup(countBlock)
 
 	// 定时检测目标键盘是否在线，自动暂停或恢复拦截
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
+			mw.Synchronize(updateTip)
+
 			enabled, name, path := cfgSnapshot()
 			if !enabled || (name == "" && path == "") {
 				continue

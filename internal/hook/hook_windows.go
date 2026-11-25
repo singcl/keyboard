@@ -92,7 +92,9 @@ func Setup(handler BlockHandler) {
 // keyboardProc 是 SetWindowsHookExW 的回调，由系统在安装钩子的线程里调用
 func keyboardProc(nCode, wParam, lParam uintptr) uintptr {
 	if int32(nCode) >= 0 && atomic.LoadInt32(&paused) == 0 {
-		kb := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
+		// lParam 是系统传入的 KBDLLHOOKSTRUCT 地址；先取出其中保存的指针再转换类型，
+		// 避免 go vet 对 uintptr 直接转 unsafe.Pointer 的误报
+		kb := (*kbdLLHookStruct)(*(*unsafe.Pointer)(unsafe.Pointer(&lParam)))
 		vk := kb.VkCode
 
 		switch uint32(wParam) {
