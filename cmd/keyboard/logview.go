@@ -99,13 +99,8 @@ func newLogView() (*logView, error) {
 		return nil, err
 	}
 
-	// 左侧放一个可伸展的空白占位，把按钮推到右边
-	spacer, err := walk.NewComposite(buttons)
-	if err != nil {
-		mw.Dispose()
-		return nil, err
-	}
-	if err := buttonLayout.SetStretchFactor(spacer, 1); err != nil {
+	// 左侧放一个可伸展的空白占位，把按钮紧凑地推到右下角
+	if _, err := walk.NewHSpacer(buttons); err != nil {
 		mw.Dispose()
 		return nil, err
 	}
