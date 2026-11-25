@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
+	"image/png"
 	"log"
 
 	"github.com/lxn/walk"
 )
+
+//go:embed icon.png
+var iconPNG []byte
 
 func main() {
 	mw, err := walk.NewMainWindow()
@@ -13,7 +19,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	icon, err := walk.Resources.Icon("icon.ico") //walk.NewIconFromResource("icon.ico")
+	img, err := png.Decode(bytes.NewReader(iconPNG))
+	if err != nil {
+		log.Fatal(err)
+	}
+	icon, err := walk.NewIconFromImage(img)
 	if err != nil {
 		log.Fatal(err)
 	}
