@@ -23,18 +23,38 @@
 需要 Go 1.18+，项目无 cgo 依赖，在 Windows 下执行：
 
 ```
-CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui"
+CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyboard
 ```
 
 产物为当前目录下的 `keyboard.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
 
-如果修改了 `icon.ico` 或 `keyboard.manifest`，需要重新生成资源文件后再编译：
+如果修改了 `internal/assets/icon.ico` 或 `internal/assets/keyboard.manifest`，需要重新生成资源文件后再编译：
 
 ```
-go run github.com/akavel/rsrc@latest -manifest keyboard.manifest -ico icon.ico -o rsrc.syso -arch amd64
+go run github.com/akavel/rsrc@latest -manifest internal/assets/keyboard.manifest -ico internal/assets/icon.ico -o cmd/keyboard/rsrc.syso -arch amd64
 ```
 
-## 日志
+## 项目结构
+
+```
+.
+├── cmd/keyboard/       # 程序入口：托盘图标、菜单
+│   └── rsrc.syso       # 编译进 exe 的图标与清单（由 rsrc 生成）
+├── internal/
+│   ├── assets/         # 图标与清单；icon.png 通过 go:embed 编入程序
+│   ├── hook/           # Win32 低级键盘钩子与拦截逻辑
+│   └── logging/        # 拦截日志读写
+├── go.mod
+└── README.md
+```
+
+## 拦截日志
+
+被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，也可通过托盘右键菜单「打开日志」查看。
+
+## 更新记录
+
+* 2026年11月：纯 Go 重写，新增拦截日志与内嵌图标
 
 * 2022年9月28日：加系统托盘图标
 

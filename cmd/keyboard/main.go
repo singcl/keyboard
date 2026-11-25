@@ -2,16 +2,16 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 	"image/png"
 	"log"
 
 	"github.com/lxn/walk"
-)
 
-//go:embed icon.png
-var iconPNG []byte
+	"keyboard/internal/assets"
+	"keyboard/internal/hook"
+	"keyboard/internal/logging"
+)
 
 func main() {
 	mw, err := walk.NewMainWindow()
@@ -19,7 +19,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	img, err := png.Decode(bytes.NewReader(iconPNG))
+	img, err := png.Decode(bytes.NewReader(assets.IconPNG))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func main() {
 	for i := 10; i <= 20; i += 5 {
 		action := walk.NewAction()
 		action.SetText(fmt.Sprintf("击键%d", i))
-		action.Triggered().Attach(SetKeyTimesFunc(i))
+		action.Triggered().Attach(setKeyTimesFunc(i))
 		ni.ContextMenu().Actions().Add(action)
 	}
 
@@ -54,7 +54,7 @@ func main() {
 		log.Fatal(err)
 	}
 	logAction.Triggered().Attach(func() {
-		if err := openLogFileForUser(); err != nil {
+		if err := logging.Open(); err != nil {
 			walk.MsgBox(mw, "打开日志失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
 		}
 	})
@@ -78,14 +78,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go setupHook()
+	go hook.Setup(logging.Blocked)
 
 	// Run the message loop.
 	mw.Run()
 }
 
-func SetKeyTimesFunc(i int) func() {
+func setKeyTimesFunc(i int) func() {
 	return func() {
-		updateKeyPressRate(i)
+		hook.SetRate(i)
 	}
 }
