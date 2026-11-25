@@ -1,6 +1,9 @@
 package devices
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseIDs(t *testing.T) {
 	cases := []struct {
@@ -30,6 +33,29 @@ func TestMatches(t *testing.T) {
 	}
 	if d.Matches("其他键盘", "") {
 		t.Error("不同名称不应匹配")
+	}
+}
+
+func TestFormatList(t *testing.T) {
+	list := []Device{
+		{Name: "AULA-F99 5.0", VID: "3554", PID: "FA07"},
+		{Name: "AULA-F99 5.0", VID: "3554", PID: "FA07"},
+		{Name: "LANGTU BT5.0_3", VID: "046D", PID: "B34C"},
+		{Name: "ACPI HPQ8002"},
+	}
+
+	got := FormatList(list, "LANGTU BT5.0_3", "")
+	if n := strings.Count(got, "AULA-F99 5.0"); n != 1 {
+		t.Errorf("重复设备应去重，出现 %d 次", n)
+	}
+	if !strings.Contains(got, "实体 2") {
+		t.Errorf("实体设备统计错误：\n%s", got)
+	}
+	if !strings.Contains(got, "LANGTU BT5.0_3（当前目标）") {
+		t.Errorf("目标标记缺失：\n%s", got)
+	}
+	if !strings.Contains(got, "系统 / 虚拟设备") {
+		t.Errorf("缺少系统设备分组：\n%s", got)
 	}
 }
 

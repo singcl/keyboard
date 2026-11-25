@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image/png"
 	"os"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -207,16 +206,9 @@ func main() {
 			return
 		}
 
-		var b strings.Builder
-		fmt.Fprintf(&b, "检测到 %d 个键盘设备（防抖仍对所有键盘生效）：\n", len(list))
-		for i, d := range list {
-			fmt.Fprintf(&b, "\n%d. %s", i+1, d.DisplayName())
-			if d.VID != "" {
-				fmt.Fprintf(&b, "（VID_%s / PID_%s）", d.VID, d.PID)
-			}
-			fmt.Fprintf(&b, "\n   %s", d.Path)
-		}
-		walk.MsgBox(mw, "键盘设备", b.String(), walk.MsgBoxOK|walk.MsgBoxIconInformation)
+		walk.MsgBox(mw, "键盘设备",
+			devices.FormatList(list, cfg.TargetName, cfg.TargetPath),
+			walk.MsgBoxOK|walk.MsgBoxIconInformation)
 	})
 	if err := ni.ContextMenu().Actions().Add(deviceAction); err != nil {
 		fatal(err)
@@ -266,17 +258,17 @@ func main() {
 		_ = targetMenu.Actions().Clear()
 
 		list, err := devices.List()
-		if err != nil {
+		if err != nil || len(list) == 0 {
+			empty := walk.NewAction()
+			_ = empty.SetText("未检测到键盘设备")
+			_ = empty.SetEnabled(false)
+			_ = targetMenu.Actions().Add(empty)
 			return
 		}
-		for _, d := range list {
-			d := d
+
+		addItem := func(d devices.Device) {
 			action := walk.NewAction()
-			text := d.DisplayName()
-			if d.VID != "" {
-				text += fmt.Sprintf("（VID_%s / PID_%s）", d.VID, d.PID)
-			}
-			_ = action.SetText(text)
+			_ = action.SetText(d.DisplayName())
 			_ = action.SetChecked(d.Matches(cfg.TargetName, cfg.TargetPath))
 			action.Triggered().Attach(func() {
 				updateCfg(func(c *config.Config) {
@@ -291,6 +283,27 @@ func main() {
 				rebuildTargetMenu()
 			})
 			_ = targetMenu.Actions().Add(action)
+		}
+
+		physical, system := devices.Group(list)
+		for _, d := range physical {
+			addItem(d)
+		}
+		if len(physical) == 0 {
+			none := walk.NewAction()
+			_ = none.SetText("未检测到实体键盘")
+			_ = none.SetEnabled(false)
+			_ = targetMenu.Actions().Add(none)
+		}
+		if len(system) > 0 {
+			_ = targetMenu.Actions().Add(walk.NewSeparatorAction())
+			header := walk.NewAction()
+			_ = header.SetText("系统 / 虚拟设备")
+			_ = header.SetEnabled(false)
+			_ = targetMenu.Actions().Add(header)
+			for _, d := range system {
+				addItem(d)
+			}
 		}
 	}
 	rebuildTargetMenu()

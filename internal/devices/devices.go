@@ -4,6 +4,8 @@
 package devices
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"unsafe"
 
@@ -124,7 +126,7 @@ type Device struct {
 // DisplayName 返回用于展示的名称：友好名 > 品牌 > 路径推断。
 func (d Device) DisplayName() string {
 	if d.Name != "" {
-		return d.Name
+		return strings.TrimSpace(d.Name)
 	}
 	if d.Brand != "" {
 		return d.Brand + " 键盘"
@@ -152,6 +154,69 @@ func Online(name, path string) bool {
 		}
 	}
 	return false
+}
+
+// Group 去重后按实体键盘与系统/虚拟设备分组，组内按展示名排序。
+func Group(list []Device) (physical, system []Device) {
+	physical = make([]Device, 0, len(list))
+	system = make([]Device, 0, len(list))
+	seen := make(map[string]bool, len(list))
+	for _, d := range list {
+		// 同一把键盘可能有多个采集接口，按展示名+VID/PID 去重
+		key := d.DisplayName() + "|" + d.VID + "|" + d.PID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		if d.VID != "" && d.PID != "" {
+			physical = append(physical, d)
+		} else {
+			system = append(system, d)
+		}
+	}
+
+	byName := func(items []Device) {
+		sort.SliceStable(items, func(i, j int) bool {
+			return strings.ToLower(items[i].DisplayName()) < strings.ToLower(items[j].DisplayName())
+		})
+	}
+	byName(physical)
+	byName(system)
+	return physical, system
+}
+
+// FormatList 把设备列表整理成便于阅读的分组文本：实体键盘在前，系统/虚拟设备在后。
+func FormatList(list []Device, targetName, targetPath string) string {
+	physical, system := Group(list)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "检测到键盘设备 %d 个（实体 %d，系统/虚拟 %d）。",
+		len(physical)+len(system), len(physical), len(system))
+
+	writeGroup := func(title string, items []Device) {
+		if len(items) == 0 {
+			return
+		}
+		fmt.Fprintf(&b, "\n\n%s\n", title)
+		for i, d := range items {
+			fmt.Fprintf(&b, "  %d. %s", i+1, strings.TrimSpace(d.DisplayName()))
+			if d.Matches(targetName, targetPath) {
+				b.WriteString("（当前目标）")
+			}
+			if d.VID != "" || d.PID != "" {
+				fmt.Fprintf(&b, "\n     VID_%s / PID_%s", d.VID, d.PID)
+			}
+			if i != len(items)-1 {
+				b.WriteString("\n")
+			}
+		}
+	}
+	writeGroup("实体键盘", physical)
+	writeGroup("系统 / 虚拟设备（通常不是外接键盘）", system)
+
+	b.WriteString("\n\n提示：拦截对所有键盘生效，指定目标只影响是否自动暂停。")
+	return b.String()
 }
 
 // List 枚举当前系统中的键盘设备。
