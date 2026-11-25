@@ -50,6 +50,9 @@ var (
 
 	// delayNanos 是同一颗按键两次“重新按下”之间的最小间隔，默认 10 次/秒
 	delayNanos = int64(100 * time.Millisecond)
+
+	// paused 非 0 时暂停拦截，所有按键直接放行
+	paused int32
 )
 
 // kbdLLHookStruct 对应 Win32 的 KBDLLHOOKSTRUCT
@@ -76,12 +79,30 @@ type msg struct {
 	LPrivate uint32
 }
 
-// SetRate 设置每秒最多允许的击键次数，<=0 时忽略。
-func SetRate(pressRate int) {
-	if pressRate <= 0 {
+// SetDebounce 设置同一颗按键两次“重新按下”之间的最小间隔，<=0 时忽略。
+func SetDebounce(d time.Duration) {
+	if d <= 0 {
 		return
 	}
-	atomic.StoreInt64(&delayNanos, int64(time.Second)/int64(pressRate))
+	atomic.StoreInt64(&delayNanos, int64(d))
+}
+
+// ShouldBlock 判断一次按下是否属于需要拦截的误触发：
+// 同键、非自动重复，且距上次按下小于防抖窗口。
+func ShouldBlock(autoRepeat bool, vk, prevVK uint32, since, debounce time.Duration) bool {
+	if autoRepeat || prevVK == 0 || vk != prevVK {
+		return false
+	}
+	return since < debounce
+}
+
+// SetPaused 暂停或恢复拦截；暂停期间所有按键直接放行。
+func SetPaused(pause bool) {
+	var v int32
+	if pause {
+		v = 1
+	}
+	atomic.StoreInt32(&paused, v)
 }
 
 // Setup 安装钩子并在当前 goroutine 上跑消息循环，正常情况下不会返回。
@@ -116,7 +137,7 @@ func Setup(handler BlockHandler) {
 
 // keyboardProc 是 SetWindowsHookExW 的回调，由系统在安装钩子的线程里调用
 func keyboardProc(nCode, wParam, lParam uintptr) uintptr {
-	if int32(nCode) >= 0 {
+	if int32(nCode) >= 0 && atomic.LoadInt32(&paused) == 0 {
 		kb := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
 		vk := kb.VkCode
 
@@ -136,8 +157,9 @@ func keyboardProc(nCode, wParam, lParam uintptr) uintptr {
 			if !autoRepeat {
 				now := time.Now()
 				delay := time.Duration(atomic.LoadInt64(&delayNanos))
-				if !lastDown.IsZero() && vk == lastVK && now.Sub(lastDown) < delay {
-					onBlock(vk, kb.ScanCode, kb.Flags&1 != 0, now.Sub(lastDown))
+				since := now.Sub(lastDown)
+				if !lastDown.IsZero() && ShouldBlock(autoRepeat, vk, lastVK, since, delay) {
+					onBlock(vk, kb.ScanCode, kb.Flags&1 != 0, since)
 					return 1 // 拦截本次误触发
 				}
 				lastDown = now

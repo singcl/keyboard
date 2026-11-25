@@ -4,62 +4,149 @@ import (
 	"bytes"
 	"fmt"
 	"image/png"
-	"log"
+	"os"
+	"time"
+	"unsafe"
 
 	"github.com/lxn/walk"
+	"golang.org/x/sys/windows"
 
 	"keyboard/internal/assets"
+	"keyboard/internal/autostart"
+	"keyboard/internal/config"
 	"keyboard/internal/hook"
 	"keyboard/internal/logging"
+	"keyboard/internal/singleinstance"
+)
+
+const (
+	mbOK        = 0x00000000
+	mbIconError = 0x00000010
+)
+
+var (
+	user32          = windows.NewLazySystemDLL("user32.dll")
+	procMessageBoxW = user32.NewProc("MessageBoxW")
 )
 
 func main() {
+	release, ok := singleinstance.Acquire("keyboard-misfire-filter")
+	if !ok {
+		return
+	}
+	defer release()
+
+	cfg := config.Load()
+	debounceMS := cfg.DebounceMS
+	paused := false
+
 	mw, err := walk.NewMainWindow()
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
 	img, err := png.Decode(bytes.NewReader(assets.IconPNG))
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 	icon, err := walk.NewIconFromImage(img)
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
 	ni, err := walk.NewNotifyIcon(mw)
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
-
 	defer ni.Dispose()
 
 	if err := ni.SetIcon(icon); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
-	//ni.SetToolTip("右键设置拦截阈值或退出")
+	var actions = make(map[int]*walk.Action)
+
+	updateTip := func() {
+		state := "运行中"
+		if paused {
+			state = "已暂停"
+		}
+		_ = ni.SetToolTip(fmt.Sprintf("键盘防抖 %dms · %s", debounceMS, state))
+	}
+
+	syncMenu := func() {
+		for m, a := range actions {
+			_ = a.SetChecked(m == debounceMS)
+		}
+		updateTip()
+	}
+
+	applyDebounce := func(ms int) {
+		debounceMS = ms
+		hook.SetDebounce(time.Duration(ms) * time.Millisecond)
+		syncMenu()
+		_ = config.Save(config.Config{DebounceMS: ms})
+	}
 
 	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
-	for _, item := range []struct {
-		rate int
-		ms   int
-	}{
-		{10, 100},
-		{15, 67},
-		{20, 50},
-	} {
+	for _, ms := range []int{100, 67, 50} {
+		ms := ms
 		action := walk.NewAction()
-		action.SetText(fmt.Sprintf("防抖 %dms", item.ms))
-		action.Triggered().Attach(setKeyTimesFunc(item.rate))
-		ni.ContextMenu().Actions().Add(action)
+		if err := action.SetText(fmt.Sprintf("防抖 %dms", ms)); err != nil {
+			fatal(err)
+		}
+		action.Triggered().Attach(func() { applyDebounce(ms) })
+		if err := ni.ContextMenu().Actions().Add(action); err != nil {
+			fatal(err)
+		}
+		actions[ms] = action
+	}
+
+	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
+		fatal(err)
+	}
+
+	// 暂停/恢复防抖，勾选表示当前处于暂停状态
+	pauseAction := walk.NewAction()
+	if err := pauseAction.SetText("暂停防抖"); err != nil {
+		fatal(err)
+	}
+	pauseAction.Triggered().Attach(func() {
+		paused = !paused
+		hook.SetPaused(paused)
+		_ = pauseAction.SetChecked(paused)
+		updateTip()
+	})
+	if err := ni.ContextMenu().Actions().Add(pauseAction); err != nil {
+		fatal(err)
+	}
+
+	// 开机自启
+	autoAction := walk.NewAction()
+	if err := autoAction.SetText("开机自启"); err != nil {
+		fatal(err)
+	}
+	_ = autoAction.SetChecked(autostart.Enabled())
+	autoAction.Triggered().Attach(func() {
+		enable := !autostart.Enabled()
+		if err := autostart.Set(enable); err != nil {
+			walk.MsgBox(mw, "设置开机自启失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+			return
+		}
+		_ = autoAction.SetChecked(enable)
+	})
+	if err := ni.ContextMenu().Actions().Add(autoAction); err != nil {
+		fatal(err)
+	}
+
+	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
+		fatal(err)
 	}
 
 	// 打开拦截日志
 	logAction := walk.NewAction()
 	if err := logAction.SetText("打开日志"); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 	logAction.Triggered().Attach(func() {
 		if err := logging.Open(); err != nil {
@@ -67,23 +154,47 @@ func main() {
 		}
 	})
 	if err := ni.ContextMenu().Actions().Add(logAction); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
-	// We put an exit action into the context menu.
+	// 清空拦截日志
+	clearAction := walk.NewAction()
+	if err := clearAction.SetText("清空日志"); err != nil {
+		fatal(err)
+	}
+	clearAction.Triggered().Attach(func() {
+		if walk.DlgCmdNo == walk.MsgBox(mw, "清空日志", "确定要清空拦截日志吗？",
+			walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) {
+			return
+		}
+		if err := logging.Clear(); err != nil {
+			walk.MsgBox(mw, "清空日志失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+		}
+	})
+	if err := ni.ContextMenu().Actions().Add(clearAction); err != nil {
+		fatal(err)
+	}
+
+	if err := ni.ContextMenu().Actions().Add(walk.NewSeparatorAction()); err != nil {
+		fatal(err)
+	}
+
 	exitAction := walk.NewAction()
 	if err := exitAction.SetText("退出"); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 	exitAction.Triggered().Attach(func() { walk.App().Exit(0) })
 	if err := ni.ContextMenu().Actions().Add(exitAction); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
 	ni.SetVisible(true)
 
-	if err := ni.ShowInfo("右键图标设置", "右键图标可设置拦截阈值（默认 100ms）或退出"); err != nil {
-		log.Fatal(err)
+	syncMenu()
+	hook.SetDebounce(time.Duration(debounceMS) * time.Millisecond)
+
+	if err := ni.ShowInfo("右键图标设置", "右键图标可设置防抖阈值（默认 100ms）或退出"); err != nil {
+		fatal(err)
 	}
 
 	go hook.Setup(logging.Blocked)
@@ -92,8 +203,10 @@ func main() {
 	mw.Run()
 }
 
-func setKeyTimesFunc(i int) func() {
-	return func() {
-		hook.SetRate(i)
-	}
+// fatal 在 windowsgui 模式下没有控制台，用弹窗展示启动错误。
+func fatal(err error) {
+	text, _ := windows.UTF16PtrFromString(err.Error())
+	caption, _ := windows.UTF16PtrFromString("keyboard")
+	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(caption)), mbOK|mbIconError)
+	os.Exit(1)
 }

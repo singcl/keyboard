@@ -14,13 +14,13 @@
 
 解压后，双击里面的 keyboard.exe 运行。
 
-可以设置为开机启动，这样以后就不需要手动双击了。
+托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、查看/清空日志。开启「开机自启」后就不需要每次手动双击了。
 
 下载地址：https://github.com/garfeng/keyboard/releases/latest
 
 ## 构建
 
-需要 Go 1.18+，项目无 cgo 依赖，在 Windows 下执行：
+需要 Go 1.22+，项目无 cgo 依赖，在 Windows 下执行：
 
 ```
 build.bat      # Windows cmd / PowerShell
@@ -35,29 +35,36 @@ CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyb
 
 产物为当前目录下的 `keyboard.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
 
-如果修改了 `internal/assets/icon.ico` 或 `internal/assets/keyboard.manifest`，需要重新生成资源文件后再编译：
+如果修改了 `internal/assets/icon.ico`、`internal/assets/keyboard.manifest` 或 `winres/winres.json`（版本号、文件描述等），需要重新生成资源后再编译：
 
 ```
-go run github.com/akavel/rsrc@latest -manifest internal/assets/keyboard.manifest -ico internal/assets/icon.ico -o cmd/keyboard/rsrc.syso -arch amd64
+go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd/keyboard/rsrc.syso --arch amd64 --no-suffix
 ```
 
 ## 项目结构
 
 ```
 .
-├── cmd/keyboard/       # 程序入口：托盘图标、菜单
-│   └── rsrc.syso       # 编译进 exe 的图标与清单（由 rsrc 生成）
+├── cmd/keyboard/              # 程序入口：托盘图标、菜单
+│   └── rsrc.syso              # 图标、清单与版本信息（go-winres 生成）
 ├── internal/
-│   ├── assets/         # 图标与清单；icon.png 通过 go:embed 编入程序
-│   ├── hook/           # Win32 低级键盘钩子与拦截逻辑
-│   └── logging/        # 拦截日志读写
+│   ├── assets/                # 图标与清单；icon.png 通过 go:embed 编入程序
+│   ├── autostart/             # 开机自启（注册表 Run 键）
+│   ├── config/                # 防抖阈值持久化
+│   ├── hook/                  # Win32 低级键盘钩子与拦截逻辑
+│   ├── logging/               # 拦截日志（异步写入、轮转、清空）
+│   └── singleinstance/        # 单实例互斥量
+├── winres/
+│   └── winres.json            # 图标、清单与版本信息资源定义
 ├── go.mod
 └── README.md
 ```
 
 ## 拦截日志
 
-被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，也可通过托盘右键菜单「打开日志」查看。
+被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`，也可通过托盘右键菜单「打开日志」查看、「清空日志」删除。
+
+注意：日志包含被拦截按键的名称和键码，属于输入信息，分享或反馈问题前请先清空或自行删改。
 
 ## 更新记录
 
