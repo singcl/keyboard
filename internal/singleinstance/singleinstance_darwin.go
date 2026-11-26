@@ -17,7 +17,7 @@ func Acquire(name string) (release func(), ok bool) {
 	if err != nil {
 		return func() {}, true
 	}
-	dir = filepath.Join(dir, "keyboard")
+	dir = filepath.Join(dir, "keyboard-plus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return func() {}, true
 	}

@@ -12,7 +12,7 @@ import (
 
 const (
 	runKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
-	valueName  = "keyboard"
+	valueName  = "keyboard-plus"
 )
 
 // Enabled 判断当前 exe 是否已设置为开机自启。

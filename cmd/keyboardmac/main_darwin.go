@@ -65,7 +65,7 @@ func main() {
 	// 菜单栏与事件监听都必须运行在主线程的 run loop 上
 	runtime.LockOSThread()
 
-	release, ok := singleinstance.Acquire("keyboard-misfire-filter")
+	release, ok := singleinstance.Acquire("keyboard-plus")
 	if !ok {
 		showAlert("键盘防抖", "程序已在运行，请在菜单栏的键盘图标中操作。")
 		return

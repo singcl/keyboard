@@ -1,6 +1,6 @@
 // Package logging 负责把被拦截的按键写入日志文件，并提供路径与清理操作。
 //
-// 日志位于 %LOCALAPPDATA%\keyboard\keyboard.log，只有真正被拦截的按键才会写入。
+// 日志位于 %LOCALAPPDATA%\keyboard-plus\keyboard-plus.log，只有真正被拦截的按键才会写入。
 // 写入在独立 goroutine 中完成，避免在键盘钩子回调里做磁盘 IO。
 package logging
 
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	maxLogSize = 1 << 20 // 1MB，超过后轮转为 keyboard.log.1
+	maxLogSize = 1 << 20 // 1MB，超过后轮转为 keyboard-plus.log.1
 	header     = "# keyboard 日志（记录被拦截的按键与状态事件）"
 )
 
@@ -67,11 +67,11 @@ func Path() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir = filepath.Join(dir, "keyboard")
+	dir = filepath.Join(dir, "keyboard-plus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "keyboard.log"), nil
+	return filepath.Join(dir, "keyboard-plus.log"), nil
 }
 
 func writeLoop() {

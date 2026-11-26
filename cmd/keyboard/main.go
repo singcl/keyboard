@@ -39,7 +39,7 @@ var (
 )
 
 func main() {
-	release, ok := singleinstance.Acquire("keyboard-misfire-filter")
+	release, ok := singleinstance.Acquire("keyboard-plus")
 	if !ok {
 		// 已有实例在运行，提示用户从托盘操作，避免双击后“毫无反应”
 		text, _ := windows.UTF16PtrFromString("程序已在运行，请在任务栏右下角的托盘图标中操作。")
@@ -553,7 +553,7 @@ func main() {
 // fatal 在 windowsgui 模式下没有控制台，用弹窗展示启动错误。
 func fatal(err error) {
 	text, _ := windows.UTF16PtrFromString(err.Error())
-	caption, _ := windows.UTF16PtrFromString("keyboard")
+	caption, _ := windows.UTF16PtrFromString("keyboard-plus")
 	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(caption)), mbOK|mbIconError)
 	os.Exit(1)
 }

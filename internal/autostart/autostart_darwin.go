@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const label = "com.singcl.keyboard"
+const label = "com.singcl.keyboard-plus"
 
 const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -31,7 +31,7 @@ const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-// plistPath 返回 ~/Library/LaunchAgents/com.singcl.keyboard.plist，并确保目录存在。
+// plistPath 返回 ~/Library/LaunchAgents/com.singcl.keyboard-plus.plist，并确保目录存在。
 func plistPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

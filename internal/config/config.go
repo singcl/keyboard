@@ -1,4 +1,4 @@
-// Package config 负责读写程序配置，配置文件位于 %LOCALAPPDATA%\keyboard\config.json。
+// Package config 负责读写程序配置，配置文件位于 %LOCALAPPDATA%\keyboard-plus\config.json。
 package config
 
 import (
@@ -31,7 +31,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir = filepath.Join(dir, "keyboard")
+	dir = filepath.Join(dir, "keyboard-plus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

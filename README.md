@@ -88,7 +88,7 @@ lipo -create -output keyboard-plus keyboard-plus-arm64 keyboard-plus-amd64
 
 ## 拦截日志
 
-被拦截的按键记录在 `%LOCALAPPDATA%\keyboard\keyboard.log`（macOS 为 `~/Library/Caches/keyboard/keyboard.log`），托盘右键「查看日志」会在内置窗口里显示最后 500 行并每 2 秒自动刷新，「清空日志」可删除；「配置文件位置」会在资源管理器中定位 `config.json`。
+被拦截的按键记录在 `%LOCALAPPDATA%\keyboard-plus\keyboard-plus.log`（macOS 为 `~/Library/Caches/keyboard-plus/keyboard-plus.log`），托盘右键「查看日志」会在内置窗口里显示最后 500 行并每 2 秒自动刷新，「清空日志」可删除；「配置文件位置」会在资源管理器中定位 `config.json`。
 
 注意：日志包含被拦截按键的名称和键码，属于输入信息，分享或反馈问题前请先清空或自行删改。
 
@@ -110,8 +110,8 @@ macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15
 
 * 首次运行会请求「输入监控」权限，授权后需要重新启动程序；菜单第一行显示「未生效（缺少权限）」时说明没有授权。
 * 与 Windows 一样，事件回调里拿不到设备标识，因此只有全局拦截，没有「目标键盘 / 仅目标键盘在线时防抖」选项。
-* 开机自启写入 `~/Library/LaunchAgents/com.singcl.keyboard.plist`，下次登录时生效；取消勾选会删除该文件。
-* 日志与配置文件位于 `~/Library/Caches/keyboard/`。
+* 开机自启写入 `~/Library/LaunchAgents/com.singcl.keyboard-plus.plist`，下次登录时生效；取消勾选会删除该文件。
+* 日志与配置文件位于 `~/Library/Caches/keyboard-plus/`。
 
 平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `_windows.go` / `_darwin.go` 拆分，Windows 部分仍是纯 Go；macOS 的界面与事件监听通过 cgo 调用 Cocoa / CoreGraphics。
 
