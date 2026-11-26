@@ -27,13 +27,32 @@ func TestParseIDs(t *testing.T) {
 func TestMatches(t *testing.T) {
 	d := Device{Name: "LANGTU BT5.0_3", Path: `\\?\HID#VID_046D&PID_B34C`}
 	if !d.Matches("LANGTU BT5.0_3", "") {
-		t.Error("按名称应匹配")
+		t.Error("未配置路径时按名称应匹配")
 	}
 	if !d.Matches("", `\\?\HID#VID_046D&PID_B34C`) {
 		t.Error("按路径应匹配")
 	}
 	if d.Matches("其他键盘", "") {
 		t.Error("不同名称不应匹配")
+	}
+	// 配置了路径就只按路径匹配，避免同型号的另一把键盘被误判为目标
+	if d.Matches("LANGTU BT5.0_3", `\\?\HID#VID_046D&PID_B34C&MI_01`) {
+		t.Error("路径不同时不应再按同名匹配")
+	}
+}
+
+func TestLabels(t *testing.T) {
+	list := []Device{
+		{Name: "LANGTU BT5.0_3", VID: "046D", PID: "B34C"},
+		{Name: "LANGTU BT5.0_3", VID: "258A", PID: "0049"},
+		{Name: "AULA-F99 5.0", VID: "3554", PID: "FA07"},
+	}
+	labels := Labels(list)
+	if !strings.Contains(labels[0], "046D") || !strings.Contains(labels[1], "258A") {
+		t.Errorf("同名设备应追加 VID/PID 区分：%v", labels)
+	}
+	if labels[2] != "AULA-F99 5.0" {
+		t.Errorf("不重名时不应追加信息：%q", labels[2])
 	}
 }
 

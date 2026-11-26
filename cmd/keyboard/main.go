@@ -364,9 +364,9 @@ func main() {
 			return
 		}
 
-		addItem := func(d devices.Device) {
+		addItem := func(d devices.Device, label string) {
 			action := walk.NewAction()
-			_ = action.SetText(d.DisplayName())
+			_ = action.SetText(label)
 			_ = action.SetChecked(d.Matches(cfg.TargetName, cfg.TargetPath))
 			action.Triggered().Attach(func() {
 				updateCfg(func(c *config.Config) {
@@ -378,15 +378,16 @@ func main() {
 					targetOnline = devices.Online(d.Name, d.Path)
 				}
 				applyPauseState()
-				logging.Event("目标键盘切换为：" + d.DisplayName())
+				logging.Event("目标键盘切换为：" + label)
 				rebuildTargetMenu()
 			})
 			_ = targetMenu.Actions().Add(action)
 		}
 
 		physical, system := devices.Group(list)
-		for _, d := range physical {
-			addItem(d)
+		physicalLabels := devices.Labels(physical)
+		for i, d := range physical {
+			addItem(d, physicalLabels[i])
 		}
 		if len(physical) == 0 {
 			none := walk.NewAction()
@@ -400,8 +401,9 @@ func main() {
 			_ = header.SetText("系统 / 虚拟设备")
 			_ = header.SetEnabled(false)
 			_ = targetMenu.Actions().Add(header)
-			for _, d := range system {
-				addItem(d)
+			systemLabels := devices.Labels(system)
+			for i, d := range system {
+				addItem(d, systemLabels[i])
 			}
 		}
 	}

@@ -51,10 +51,12 @@ func (d Device) DisplayName() string {
 	return shortName(d.Path)
 }
 
-// Matches 判断设备是否与指定目标匹配：路径或名称一致即可。
+// Matches 判断设备是否与指定目标匹配。
+// 配置了路径时按路径精确匹配：同型号的多把键盘名称相同，只有路径能区分；
+// 没有路径时才退回到按名称匹配。
 func (d Device) Matches(name, path string) bool {
-	if path != "" && d.Path == path {
-		return true
+	if path != "" {
+		return d.Path == path
 	}
 	return name != "" && d.Name == name
 }
@@ -103,6 +105,25 @@ func Group(list []Device) (physical, system []Device) {
 	return physical, system
 }
 
+// Labels 返回一组设备各自用于展示的名称。
+// 名称重复的设备追加 VID/PID，避免菜单里出现多条一模一样的条目。
+func Labels(list []Device) []string {
+	counts := make(map[string]int, len(list))
+	for _, d := range list {
+		counts[d.DisplayName()]++
+	}
+
+	labels := make([]string, len(list))
+	for i, d := range list {
+		label := d.DisplayName()
+		if counts[label] > 1 && (d.VID != "" || d.PID != "") {
+			label = fmt.Sprintf("%s（VID_%s / PID_%s）", label, d.VID, d.PID)
+		}
+		labels[i] = label
+	}
+	return labels
+}
+
 // FormatList 把设备列表整理成便于阅读的分组文本：实体键盘在前，系统/虚拟设备在后。
 func FormatList(list []Device, targetName, targetPath string) string {
 	physical, system := Group(list)
@@ -116,8 +137,9 @@ func FormatList(list []Device, targetName, targetPath string) string {
 			return
 		}
 		fmt.Fprintf(&b, "\n\n%s\n", title)
+		labels := Labels(items)
 		for i, d := range items {
-			fmt.Fprintf(&b, "  %d. %s", i+1, strings.TrimSpace(d.DisplayName()))
+			fmt.Fprintf(&b, "  %d. %s", i+1, strings.TrimSpace(labels[i]))
 			if d.Matches(targetName, targetPath) {
 				b.WriteString("（当前目标）")
 			}
