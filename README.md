@@ -72,7 +72,7 @@ build.bat      # Windows cmd / PowerShell
 CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
 ```
 
-产物为当前目录下的 `keyboard-plus.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
+两个脚本会同时产出标准版 `keyboard-plus.exe` 与精简版 `keyboard-plus-slim.exe`；`-H windowsgui` 表示运行时不显示控制台窗口。
 
 加 `-tags noupdate` 可编译精简版（去掉「检查更新」，不链接 `net/http`，体积约为一半）。
 
