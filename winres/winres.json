@@ -11,17 +11,17 @@
             "CompanyName": "singcl",
             "FileDescription": "Keyboard debounce utility",
             "FileVersion": "1.2.3.0",
-            "InternalName": "keyboard",
-            "OriginalFilename": "keyboard.exe",
-            "ProductName": "keyboard",
+            "InternalName": "keyboard-plus",
+            "OriginalFilename": "keyboard-plus.exe",
+            "ProductName": "keyboard-plus",
             "ProductVersion": "1.2.3.0"
           },
           "0804": {
             "CompanyName": "singcl",
             "FileDescription": "键盘防误触工具",
             "FileVersion": "1.2.3.0",
-            "InternalName": "keyboard",
-            "OriginalFilename": "keyboard.exe",
+            "InternalName": "keyboard-plus",
+            "OriginalFilename": "keyboard-plus.exe",
             "ProductName": "键盘防抖",
             "ProductVersion": "1.2.3.0"
           }

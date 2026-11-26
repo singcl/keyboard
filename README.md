@@ -16,11 +16,11 @@
 
 本项目源自 [garfeng/keyboard](https://github.com/garfeng/keyboard)（MIT 协议）：原作者用 C++ 实现了最初的版本。本仓库在其基础上用 Go 重写了全部代码，并增加了拦截日志、设备识别与目标键盘、开机自启、托盘/菜单栏界面以及 macOS 支持。
 
-解压后，双击里面的 keyboard.exe 运行。
+解压后，双击里面的 keyboard-plus.exe 运行。
 
 托盘图标右键可以设置防抖阈值、暂停拦截、开机自启、识别键盘设备、选择目标键盘、查看/清空日志、定位配置文件。暂停时托盘图标会变灰，菜单第一行也会显示当前状态。开启「开机自启」后就不需要每次手动双击了。
 
-macOS 版本下载后直接运行 `keyboard`，图标出现在菜单栏。首次运行需要在「系统设置 → 隐私与安全性 → 输入监控」中勾选本程序（听不到按键时请看这一项），之后重新启动即可生效。菜单里同样可以设置防抖阈值、暂停拦截、开机自启、打开日志与配置文件；macOS 目前只做全局拦截，没有「目标键盘」相关选项。程序未做代码签名，若提示「无法打开」，在「隐私与安全性」里点「仍要打开」即可。
+macOS 版本下载后直接运行 `keyboard-plus`，图标出现在菜单栏。首次运行需要在「系统设置 → 隐私与安全性 → 输入监控」中勾选本程序（听不到按键时请看这一项），之后重新启动即可生效。菜单里同样可以设置防抖阈值、暂停拦截、开机自启、打开日志与配置文件；macOS 目前只做全局拦截，没有「目标键盘」相关选项。程序未做代码签名，若提示「无法打开」，在「隐私与安全性」里点「仍要打开」即可。
 
 下载地址：https://github.com/singcl/keyboard/releases/latest
 
@@ -36,10 +36,10 @@ build.bat      # Windows cmd / PowerShell
 或手动执行：
 
 ```
-CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard.exe ./cmd/keyboard
+CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
 ```
 
-产物为当前目录下的 `keyboard.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
+产物为当前目录下的 `keyboard-plus.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
 
 如果修改了 `internal/assets/icon.ico`、`internal/assets/keyboard.manifest` 或 `winres/winres.json`（版本号、文件描述等），需要重新生成资源后再编译：
 
@@ -50,16 +50,16 @@ go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd
 macOS 版本使用 cgo（Cocoa + CoreGraphics），需要 Xcode 命令行工具：
 
 ```
-CGO_ENABLED=1 go build -ldflags "-w -s" -o keyboard ./cmd/keyboardmac
+CGO_ENABLED=1 go build -ldflags "-w -s" -o keyboard-plus ./cmd/keyboardmac
 ```
 
 同时支持 Apple Silicon 与 Intel 的通用二进制：
 
 ```
 for arch in arm64 amd64; do
-  CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s" -o keyboard-$arch ./cmd/keyboardmac
+  CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s" -o keyboard-plus-$arch ./cmd/keyboardmac
 done
-lipo -create -output keyboard keyboard-arm64 keyboard-amd64
+lipo -create -output keyboard-plus keyboard-plus-arm64 keyboard-plus-amd64
 ```
 
 ## 项目结构
@@ -116,6 +116,8 @@ macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15
 平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `_windows.go` / `_darwin.go` 拆分，Windows 部分仍是纯 Go；macOS 的界面与事件监听通过 cgo 调用 Cocoa / CoreGraphics。
 
 ## 更新记录
+
+* 2026年11月：程序改名为 keyboard-plus（原 keyboard.exe 与原项目重名），配置、日志与开机自启设置保持不变
 
 * 2026年11月：新增 macOS 版本：菜单栏图标、CGEventTap 全局拦截、LaunchAgent 开机自启
 
