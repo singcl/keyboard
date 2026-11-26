@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 	"keyboard/internal/hook"
 	"keyboard/internal/logging"
 	"keyboard/internal/singleinstance"
+	"keyboard/internal/update"
 )
 
 const (
@@ -477,6 +479,16 @@ func main() {
 		fatal(err)
 	}
 
+	// 检查 GitHub 上是否有新版本（只提示并打开下载页，不自动替换）
+	checkAction := walk.NewAction()
+	if err := checkAction.SetText("检查更新…"); err != nil {
+		fatal(err)
+	}
+	checkAction.Triggered().Attach(func() { checkUpdate(mw, true) })
+	if err := ni.ContextMenu().Actions().Add(checkAction); err != nil {
+		fatal(err)
+	}
+
 	versionAction := walk.NewAction()
 	if err := versionAction.SetText("版本 v" + appVersion()); err != nil {
 		fatal(err)
@@ -506,6 +518,9 @@ func main() {
 	if err := ni.ShowInfo("右键图标设置", "右键图标可设置防抖阈值、目标键盘或退出"); err != nil {
 		fatal(err)
 	}
+
+	// 启动时静默检查一次更新，只有存在新版本才会提示
+	checkUpdate(mw, false)
 
 	// 统计今日拦截次数，同时写入拦截日志
 	countBlock := func(vk, scanCode uint32, extended bool, interval time.Duration) {
@@ -556,4 +571,45 @@ func fatal(err error) {
 	caption, _ := windows.UTF16PtrFromString("keyboard-plus")
 	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(caption)), mbOK|mbIconError)
 	os.Exit(1)
+}
+
+// checkUpdate 查询 GitHub 上是否有新版本；interactive 为 false 时只在新版本可用时提示。
+// 只提示并打开下载页，不自动下载或替换程序。
+func checkUpdate(mw walk.Form, interactive bool) {
+	current := appVersion()
+	go func() {
+		rel, err := update.Latest()
+		mw.Synchronize(func() {
+			if err != nil {
+				if interactive {
+					walk.MsgBox(mw, "检查更新失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+				}
+				return
+			}
+
+			if !update.Newer(current, rel.Tag) {
+				if interactive {
+					msg := "当前已是最新版本。"
+					if update.IsVersion(current) {
+						msg = "当前已是最新版本 v" + current + "。"
+					}
+					walk.MsgBox(mw, "检查更新", msg, walk.MsgBoxOK|walk.MsgBoxIconInformation)
+				}
+				return
+			}
+
+			msg := fmt.Sprintf("当前版本 v%s，最新版本 %s。\n\n是否打开下载页面？", current, rel.Tag)
+			if walk.MsgBox(mw, "发现新版本", msg,
+				walk.MsgBoxYesNo|walk.MsgBoxIconInformation) == walk.DlgCmdYes {
+				if err := openURL(rel.URL); err != nil {
+					walk.MsgBox(mw, "打开下载页失败", err.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+				}
+			}
+		})
+	}()
+}
+
+// openURL 用系统默认浏览器打开链接。
+func openURL(url string) error {
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }

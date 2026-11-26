@@ -16,6 +16,7 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
 void uiRun(void);
 void uiRefresh(void);
 void uiAlert(const char *title, const char *message);
+void uiUpdateAlert(const char *title, const char *message, const char *url);
 void uiPermissionAlert(void);
 */
 import "C"
@@ -40,6 +41,7 @@ import (
 	"keyboard/internal/hook"
 	"keyboard/internal/logging"
 	"keyboard/internal/singleinstance"
+	"keyboard/internal/update"
 )
 
 // appVersion 是程序版本，发布构建时通过 -ldflags "-X main.appVersion=..." 覆盖。
@@ -95,6 +97,9 @@ func main() {
 		atomic.StoreInt32(&tapActive, 1)
 	}
 	C.uiRefresh()
+
+	// 启动时静默检查一次更新，只有存在新版本才会提示
+	checkUpdate(false)
 
 	// 事件由主线程 run loop 驱动，正常情况下不会返回
 	C.uiRun()
@@ -231,6 +236,52 @@ func goRevealConfig() {
 func goQuit() {
 	hook.Stop()
 	os.Exit(0)
+}
+
+// goCheckUpdate 由菜单「检查更新…」调用。
+//
+//export goCheckUpdate
+func goCheckUpdate() {
+	checkUpdate(true)
+}
+
+// checkUpdate 查询 GitHub 上是否有新版本；interactive 为 false 时只在新版本可用时提示。
+// 只提示并打开下载页，不自动下载或替换程序。
+func checkUpdate(interactive bool) {
+	go func() {
+		rel, err := update.Latest()
+		if err != nil {
+			if interactive {
+				showUpdateAlert("检查更新失败", err.Error(), "")
+			}
+			return
+		}
+
+		if !update.Newer(appVersion, rel.Tag) {
+			if interactive {
+				msg := "当前已是最新版本。"
+				if update.IsVersion(appVersion) {
+					msg = "当前已是最新版本 v" + appVersion + "。"
+				}
+				showUpdateAlert("检查更新", msg, "")
+			}
+			return
+		}
+
+		showUpdateAlert("发现新版本",
+			fmt.Sprintf("当前版本 v%s，最新版本 %s。", appVersion, rel.Tag), rel.URL)
+	}()
+}
+
+// showUpdateAlert 弹出更新提示；url 非空时提供「打开下载页」按钮。
+func showUpdateAlert(title, message, url string) {
+	titleC := C.CString(title)
+	messageC := C.CString(message)
+	urlC := C.CString(url)
+	defer C.free(unsafe.Pointer(titleC))
+	defer C.free(unsafe.Pointer(messageC))
+	defer C.free(unsafe.Pointer(urlC))
+	C.uiUpdateAlert(titleC, messageC, urlC)
 }
 
 // grayPNG 把彩色图标转成灰度 PNG，作为暂停状态的图标。

@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <dispatch/dispatch.h>
 
 #include "_cgo_export.h"
 
@@ -63,6 +64,10 @@ static void refreshUI(void);
 
 - (void)openLog:(id)sender {
     goOpenLog();
+}
+
+- (void)checkUpdate:(id)sender {
+    goCheckUpdate();
 }
 
 - (void)revealConfig:(id)sender {
@@ -137,6 +142,7 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
 
         addItem(menu, @"打开日志", @selector(openLog:));
         addItem(menu, @"配置文件位置", @selector(revealConfig:));
+        addItem(menu, @"检查更新…", @selector(checkUpdate:));
         [menu addItem:[NSMenuItem separatorItem]];
 
         NSMenuItem *versionItem = [[NSMenuItem alloc]
@@ -172,6 +178,38 @@ void uiAlert(const char *title, const char *message) {
         [NSApp activateIgnoringOtherApps:YES];
         [alert runModal];
     }
+}
+
+// uiUpdateAlert 供 Go 的更新检查使用：检查在后台 goroutine 里进行，
+// 这里切回主线程弹窗；url 非空时提供「打开下载页」按钮。
+void uiUpdateAlert(const char *title, const char *message, const char *url) {
+    NSString *titleText = [NSString stringWithUTF8String:title];
+    NSString *messageText = [NSString stringWithUTF8String:message];
+    NSString *urlText = (url != NULL) ? [NSString stringWithUTF8String:url] : nil;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            [NSApplication sharedApplication];
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:titleText];
+            [alert setInformativeText:messageText];
+
+            BOOL hasURL = (urlText != nil && [urlText length] > 0);
+            if (hasURL) {
+                [alert addButtonWithTitle:@"打开下载页"];
+                [alert addButtonWithTitle:@"稍后"];
+            } else {
+                [alert addButtonWithTitle:@"好"];
+            }
+
+            [NSApp activateIgnoringOtherApps:YES];
+            NSModalResponse resp = [alert runModal];
+            if (hasURL && resp == NSAlertFirstButtonReturn) {
+                [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlText]];
+            }
+        }
+    });
 }
 
 void uiPermissionAlert(void) {
