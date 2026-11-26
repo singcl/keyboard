@@ -161,6 +161,12 @@ func main() {
 		}
 		if customAction != nil {
 			_ = customAction.SetChecked(custom)
+			// 自定义阈值时直接显示当前值，不用打开输入框才能看到
+			if custom {
+				_ = customAction.SetText(fmt.Sprintf("自定义阈值（%dms）…", cfg.DebounceMS))
+			} else {
+				_ = customAction.SetText("自定义阈值…")
+			}
 		}
 		updateTip()
 	}

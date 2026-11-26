@@ -215,6 +215,12 @@ static void refreshUI(void) {
         }
     }
     [gCustomItem setState:custom ? NSControlStateValueOn : NSControlStateValueOff];
+    // 自定义阈值时直接显示当前值，不用打开输入框才能看到
+    if (custom) {
+        [gCustomItem setTitle:[NSString stringWithFormat:@"自定义阈值（%dms）…", ms]];
+    } else {
+        [gCustomItem setTitle:@"自定义阈值…"];
+    }
 
     [gPauseItem setState:paused != 0 ? NSControlStateValueOn : NSControlStateValueOff];
     [gAutoItem setState:goAutostartEnabled() != 0 ? NSControlStateValueOn : NSControlStateValueOff];
