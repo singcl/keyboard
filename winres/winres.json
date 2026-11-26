@@ -3,27 +3,27 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "1.2.4.0",
-          "product_version": "1.2.4.0"
+          "file_version": "1.2.5.0",
+          "product_version": "1.2.5.0"
         },
         "info": {
           "0409": {
             "CompanyName": "singcl",
             "FileDescription": "Keyboard debounce utility",
-            "FileVersion": "1.2.4.0",
+            "FileVersion": "1.2.5.0",
             "InternalName": "keyboard-plus",
             "OriginalFilename": "keyboard-plus.exe",
             "ProductName": "keyboard-plus",
-            "ProductVersion": "1.2.4.0"
+            "ProductVersion": "1.2.5.0"
           },
           "0804": {
             "CompanyName": "singcl",
             "FileDescription": "键盘防误触工具",
-            "FileVersion": "1.2.4.0",
+            "FileVersion": "1.2.5.0",
             "InternalName": "keyboard-plus",
             "OriginalFilename": "keyboard-plus.exe",
             "ProductName": "键盘防抖",
-            "ProductVersion": "1.2.4.0"
+            "ProductVersion": "1.2.5.0"
           }
         }
       }
