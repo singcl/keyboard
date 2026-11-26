@@ -22,6 +22,8 @@
 
 macOS 版本下载后直接运行 `keyboard-plus`，图标出现在菜单栏。首次运行需要在「系统设置 → 隐私与安全性 → 输入监控」中勾选本程序（听不到按键时请看这一项），之后重新启动即可生效。菜单里同样可以设置防抖阈值、暂停拦截、开机自启、打开日志与配置文件；macOS 目前只做全局拦截，没有「目标键盘」相关选项。程序未做代码签名，若提示「无法打开」，在「隐私与安全性」里点「仍要打开」即可。
 
+> macOS 版本尚未在真机上验证，可能存在未知问题，详见下文「平台支持」。
+
 下载地址：https://github.com/singcl/keyboard/releases/latest
 
 ## 功能支持
@@ -142,6 +144,8 @@ lipo -create -output keyboard-plus keyboard-plus-arm64 keyboard-plus-amd64
 ## 平台支持
 
 目前支持 Windows 与 macOS，其他平台（如 Linux）不在支持计划内。
+
+> **macOS 版本尚未经过真机验证。** 开发者没有 macOS 设备，macOS 相关代码只通过了 CI 编译和单元测试，拦截效果、权限授权流程、菜单行为都未在真机上完整验证过，可能存在未知问题。如果你在 macOS 上使用，欢迎把结果或问题反馈到 [Issues](https://github.com/singcl/keyboard/issues)。
 
 macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15+：
 
