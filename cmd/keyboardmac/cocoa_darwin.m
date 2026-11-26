@@ -9,8 +9,9 @@ static NSMenuItem *gStatusMenuItem = nil;
 static NSMenuItem *gPauseItem = nil;
 static NSMenuItem *gAutoItem = nil;
 static NSMenuItem *gCustomItem = nil;
-static NSMenuItem *gPresetItems[3] = {nil, nil, nil};
-static const int kPresets[3] = {100, 67, 50};
+static NSMenuItem *gDebounceMenuItem = nil;
+static NSMenuItem *gPresetItems[4] = {nil, nil, nil, nil};
+static const int kPresets[4] = {100, 80, 67, 50};
 static NSImage *gNormalIcon = nil;
 static NSImage *gPausedIcon = nil;
 
@@ -112,15 +113,22 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
         [menu addItem:gStatusMenuItem];
         [menu addItem:[NSMenuItem separatorItem]];
 
-        for (int i = 0; i < 3; i++) {
-            NSMenuItem *item = addItem(menu,
-                [NSString stringWithFormat:@"防抖 %dms", kPresets[i]],
+        // 防抖阈值放进子菜单，和「目标键盘」一致
+        gDebounceMenuItem = [[NSMenuItem alloc] initWithTitle:@"防抖阈值" action:nil keyEquivalent:@""];
+        NSMenu *debounceMenu = [[NSMenu alloc] init];
+        [debounceMenu setTitle:@"防抖阈值"];
+        [gDebounceMenuItem setSubmenu:debounceMenu];
+        [menu addItem:gDebounceMenuItem];
+
+        for (int i = 0; i < 4; i++) {
+            NSMenuItem *item = addItem(debounceMenu,
+                [NSString stringWithFormat:@"%dms", kPresets[i]],
                 @selector(setDebouncePreset:));
             [item setTag:kPresets[i]];
             gPresetItems[i] = item;
         }
 
-        gCustomItem = addItem(menu, @"自定义阈值…", @selector(customDebounce:));
+        gCustomItem = addItem(debounceMenu, @"自定义阈值…", @selector(customDebounce:));
         [menu addItem:[NSMenuItem separatorItem]];
 
         gPauseItem = addItem(menu, @"暂停防抖", @selector(togglePause:));
@@ -207,7 +215,7 @@ static void refreshUI(void) {
     [gStatusMenuItem setTitle:status];
 
     BOOL custom = YES;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         BOOL on = (kPresets[i] == ms);
         [gPresetItems[i] setState:on ? NSControlStateValueOn : NSControlStateValueOff];
         if (on) {
@@ -221,6 +229,9 @@ static void refreshUI(void) {
     } else {
         [gCustomItem setTitle:@"自定义阈值…"];
     }
+
+    // 子菜单标题带上当前阈值，收起时也能看到
+    [gDebounceMenuItem setTitle:[NSString stringWithFormat:@"防抖阈值（%dms）", ms]];
 
     [gPauseItem setState:paused != 0 ? NSControlStateValueOn : NSControlStateValueOff];
     [gAutoItem setState:goAutostartEnabled() != 0 ? NSControlStateValueOn : NSControlStateValueOff];

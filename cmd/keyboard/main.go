@@ -150,6 +150,7 @@ func main() {
 	}
 
 	var customAction *walk.Action
+	var debounceMenuAction *walk.Action
 
 	syncMenu := func() {
 		custom := true
@@ -168,6 +169,10 @@ func main() {
 				_ = customAction.SetText("自定义阈值…")
 			}
 		}
+		// 子菜单标题带上当前阈值，收起时也能看到
+		if debounceMenuAction != nil {
+			_ = debounceMenuAction.SetText(fmt.Sprintf("防抖阈值（%dms）", cfg.DebounceMS))
+		}
 		updateTip()
 	}
 
@@ -178,15 +183,28 @@ func main() {
 		logging.Event(fmt.Sprintf("防抖阈值调整为 %dms", ms))
 	}
 
+	// 防抖阈值放进子菜单，和「目标键盘」一致，避免顶层菜单过长
+	debounceMenu, err := walk.NewMenu()
+	if err != nil {
+		fatal(err)
+	}
+	debounceMenuAction, err = ni.ContextMenu().Actions().AddMenu(debounceMenu)
+	if err != nil {
+		fatal(err)
+	}
+	if err := debounceMenuAction.SetText("防抖阈值"); err != nil {
+		fatal(err)
+	}
+
 	// 同一颗键在 ms 毫秒内被重新按下视为误触发并拦截
-	for _, ms := range []int{100, 67, 50} {
+	for _, ms := range []int{100, 80, 67, 50} {
 		ms := ms
 		action := walk.NewAction()
-		if err := action.SetText(fmt.Sprintf("防抖 %dms", ms)); err != nil {
+		if err := action.SetText(fmt.Sprintf("%dms", ms)); err != nil {
 			fatal(err)
 		}
 		action.Triggered().Attach(func() { applyDebounce(ms) })
-		if err := ni.ContextMenu().Actions().Add(action); err != nil {
+		if err := debounceMenu.Actions().Add(action); err != nil {
 			fatal(err)
 		}
 		actions[ms] = action
@@ -202,7 +220,7 @@ func main() {
 			applyDebounce(ms)
 		}
 	})
-	if err := ni.ContextMenu().Actions().Add(customAction); err != nil {
+	if err := debounceMenu.Actions().Add(customAction); err != nil {
 		fatal(err)
 	}
 
