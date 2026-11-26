@@ -192,7 +192,7 @@ func main() {
 		fatal(err)
 	}
 	customAction.Triggered().Attach(func() {
-		if ms, ok := askDebounce(mw, cfg.DebounceMS); ok {
+		if ms, ok := askDebounce(cfg.DebounceMS); ok {
 			applyDebounce(ms)
 		}
 	})
