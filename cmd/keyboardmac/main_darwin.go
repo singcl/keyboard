@@ -12,7 +12,7 @@ package main
 #include <stdlib.h>
 
 // 以下函数由 cocoa_darwin.m 实现。
-void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayLen, const char *version);
+void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayLen, const char *version, int updateEnabled);
 void uiRun(void);
 void uiRefresh(void);
 void uiAlert(const char *title, const char *message);
@@ -83,7 +83,7 @@ func main() {
 	C.uiInit(
 		unsafe.Pointer(&normal[0]), C.int(len(normal)),
 		unsafe.Pointer(&gray[0]), C.int(len(gray)),
-		versionC,
+		versionC, C.int(boolToInt32(update.Enabled)),
 	)
 	C.free(unsafe.Pointer(versionC))
 
@@ -99,7 +99,9 @@ func main() {
 	C.uiRefresh()
 
 	// 启动时静默检查一次更新，只有存在新版本才会提示
-	checkUpdate(false)
+	if update.Enabled {
+		checkUpdate(false)
+	}
 
 	// 事件由主线程 run loop 驱动，正常情况下不会返回
 	C.uiRun()

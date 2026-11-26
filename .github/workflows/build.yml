@@ -41,23 +41,30 @@ jobs:
           for arch in arm64 amd64; do
             CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s -X main.appVersion=$VERSION" \
               -o dist/keyboard-plus-$arch ./cmd/keyboardmac
+            CGO_ENABLED=1 GOARCH=$arch go build -tags noupdate -ldflags "-w -s -X main.appVersion=$VERSION" \
+              -o dist/keyboard-plus-slim-$arch ./cmd/keyboardmac
           done
           lipo -create -output dist/keyboard-plus dist/keyboard-plus-arm64 dist/keyboard-plus-amd64
-          chmod +x dist/keyboard-plus
-          cd dist && zip keyboard-plus-macos-universal.zip keyboard-plus
+          lipo -create -output dist/keyboard-plus-slim dist/keyboard-plus-slim-arm64 dist/keyboard-plus-slim-amd64
+          chmod +x dist/keyboard-plus dist/keyboard-plus-slim
+          cd dist
+          zip keyboard-plus-macos-universal.zip keyboard-plus
+          zip keyboard-plus-macos-universal-slim.zip keyboard-plus-slim
         env:
           CGO_ENABLED: "1"
 
       - uses: actions/upload-artifact@v4
         with:
           name: keyboard-plus-macos-universal
-          path: dist/keyboard-plus-macos-universal.zip
+          path: dist/keyboard-plus-macos-universal*.zip
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/keyboard-plus-macos-universal.zip
+          files: |
+            dist/keyboard-plus-macos-universal.zip
+            dist/keyboard-plus-macos-universal-slim.zip
           generate_release_notes: true
 
   build:
@@ -85,21 +92,27 @@ jobs:
           CGO_ENABLED: "0"
 
       - name: Build
-        run: go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
+        run: |
+          go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
+          go build -tags noupdate -ldflags "-w -s -H windowsgui" -o keyboard-plus-slim.exe ./cmd/keyboard
         env:
           CGO_ENABLED: "0"
 
       - name: Package
-        run: Compress-Archive -Path keyboard-plus.exe, README.md -DestinationPath keyboard-plus-windows-amd64.zip -Force
+        run: |
+          Compress-Archive -Path keyboard-plus.exe, README.md -DestinationPath keyboard-plus-windows-amd64.zip -Force
+          Compress-Archive -Path keyboard-plus-slim.exe, README.md -DestinationPath keyboard-plus-windows-amd64-slim.zip -Force
 
       - uses: actions/upload-artifact@v4
         with:
           name: keyboard-plus-windows-amd64
-          path: keyboard-plus-windows-amd64.zip
+          path: keyboard-plus-windows-amd64*.zip
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: keyboard-plus-windows-amd64.zip
+          files: |
+            keyboard-plus-windows-amd64.zip
+            keyboard-plus-windows-amd64-slim.zip
           generate_release_notes: true

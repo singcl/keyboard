@@ -480,13 +480,16 @@ func main() {
 	}
 
 	// 检查 GitHub 上是否有新版本（只提示并打开下载页，不自动替换）
-	checkAction := walk.NewAction()
-	if err := checkAction.SetText("检查更新…"); err != nil {
-		fatal(err)
-	}
-	checkAction.Triggered().Attach(func() { checkUpdate(mw, true) })
-	if err := ni.ContextMenu().Actions().Add(checkAction); err != nil {
-		fatal(err)
+	// 精简版（-tags noupdate）不链接 net/http，菜单里也不出现这一项
+	if update.Enabled {
+		checkAction := walk.NewAction()
+		if err := checkAction.SetText("检查更新…"); err != nil {
+			fatal(err)
+		}
+		checkAction.Triggered().Attach(func() { checkUpdate(mw, true) })
+		if err := ni.ContextMenu().Actions().Add(checkAction); err != nil {
+			fatal(err)
+		}
 	}
 
 	versionAction := walk.NewAction()
@@ -520,7 +523,9 @@ func main() {
 	}
 
 	// 启动时静默检查一次更新，只有存在新版本才会提示
-	checkUpdate(mw, false)
+	if update.Enabled {
+		checkUpdate(mw, false)
+	}
 
 	// 统计今日拦截次数，同时写入拦截日志
 	countBlock := func(vk, scanCode uint32, extended bool, interval time.Duration) {

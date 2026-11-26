@@ -15,6 +15,8 @@ static NSMenuItem *gPresetItems[4] = {nil, nil, nil, nil};
 static const int kPresets[4] = {100, 80, 67, 50};
 static NSImage *gNormalIcon = nil;
 static NSImage *gPausedIcon = nil;
+// 精简版（-tags noupdate）不构建检查更新，菜单里也不显示
+static int gUpdateEnabled = 0;
 
 static void refreshUI(void);
 
@@ -96,8 +98,9 @@ static NSImage *imageFromPNG(const void *data, int length) {
     return image;
 }
 
-void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayLen, const char *version) {
+void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayLen, const char *version, int updateEnabled) {
     @autoreleasepool {
+        gUpdateEnabled = updateEnabled;
         [NSApplication sharedApplication];
         // 只显示菜单栏图标，不在 Dock 里出现
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -142,7 +145,9 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
 
         addItem(menu, @"打开日志", @selector(openLog:));
         addItem(menu, @"配置文件位置", @selector(revealConfig:));
-        addItem(menu, @"检查更新…", @selector(checkUpdate:));
+        if (gUpdateEnabled) {
+            addItem(menu, @"检查更新…", @selector(checkUpdate:));
+        }
         [menu addItem:[NSMenuItem separatorItem]];
 
         NSMenuItem *versionItem = [[NSMenuItem alloc]

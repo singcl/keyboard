@@ -36,7 +36,7 @@ macOS 版本下载后直接运行 `keyboard-plus`，图标出现在菜单栏。�
 | 开机自启 | ✓ 注册表 Run 键 | ✓ LaunchAgent |
 | 查看拦截日志 | ✓ 内置窗口，自动刷新、可清空 | 用系统默认程序打开日志文件 |
 | 定位配置文件 | ✓ 资源管理器 | ✓ Finder |
-| 检查更新（启动时静默检查 + 菜单手动检查） | ✓ | ✓ |
+| 检查更新（启动时静默检查 + 菜单手动检查，仅标准版） | ✓ | ✓ |
 | 识别键盘设备 | ✓ | — |
 | 目标键盘 / 仅目标键盘在线时防抖 | ✓ | — |
 | 单实例（重复启动时提示） | ✓ | ✓ |
@@ -45,6 +45,17 @@ macOS 版本下载后直接运行 `keyboard-plus`，图标出现在菜单栏。�
 说明：拦截本身在所有平台上都是**全局**的，macOS 不提供设备识别与目标键盘，因此也没有「仅目标键盘在线时防抖」。日志与配置路径见下文。
 
 程序启动时会静默检查一次 GitHub 上的最新版本，只有发现新版本才提示；也可以随时在菜单里点「检查更新…」。出于安全考虑，更新只提示并打开下载页面，不会自动下载或替换程序。
+
+### 两个版本
+
+每个平台的 Release 都提供两个压缩包：
+
+| 版本 | 文件名 | 说明 |
+| --- | --- | --- |
+| 标准版 | `keyboard-plus-windows-amd64.zip`、`keyboard-plus-macos-universal.zip` | 含「检查更新」，启动时会访问 `api.github.com` |
+| 精简版 | 文件名带 `-slim` | 去掉联网检查（不链接 `net/http`），体积约为标准版的一半，不访问网络；其余功能完全一致 |
+
+两个版本的配置、日志与开机自启共用，同时安装时也只会运行一个实例；想彻底断网使用就选精简版。
 
 ## 构建
 
@@ -62,6 +73,8 @@ CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd
 ```
 
 产物为当前目录下的 `keyboard-plus.exe`，`-H windowsgui` 表示运行时不显示控制台窗口。
+
+加 `-tags noupdate` 可编译精简版（去掉「检查更新」，不链接 `net/http`，体积约为一半）。
 
 如果修改了 `internal/assets/icon.ico`、`internal/assets/keyboard.manifest` 或 `winres/winres.json`（版本号、文件描述等），需要重新生成资源后再编译：
 
@@ -83,6 +96,8 @@ for arch in arm64 amd64; do
 done
 lipo -create -output keyboard-plus keyboard-plus-arm64 keyboard-plus-amd64
 ```
+
+精简版同样加 `-tags noupdate`。
 
 ## 项目结构
 
@@ -139,7 +154,7 @@ macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15
 
 ## 更新记录
 
-* 2026年11月：新增「检查更新」（启动时静默检查 + 菜单手动检查，只提示并打开下载页）
+* 2026年11月：新增「检查更新」（标准版），并提供不含联网检查的精简版（`-slim`）
 
 * 2026年11月：程序改名为 keyboard-plus（原 keyboard.exe 与原项目重名），配置、日志与开机自启设置保持不变
 
