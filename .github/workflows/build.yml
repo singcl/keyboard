@@ -65,7 +65,8 @@ jobs:
           files: |
             dist/keyboard-plus-macos-universal.zip
             dist/keyboard-plus-macos-universal-slim.zip
-          generate_release_notes: true
+          body_path: .github/release-body.md
+          generate_release_notes: false
 
   build:
     runs-on: windows-latest
@@ -115,4 +116,5 @@ jobs:
           files: |
             keyboard-plus-windows-amd64.zip
             keyboard-plus-windows-amd64-slim.zip
-          generate_release_notes: true
+          body_path: .github/release-body.md
+          generate_release_notes: false
