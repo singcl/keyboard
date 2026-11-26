@@ -21,10 +21,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # 测试用纯 Go 模式：internal 各包不依赖 cgo，
+      # 且 cgo 链接出来的测试二进制在新版 macOS 上会因缺少 LC_UUID 无法运行。
+      # 真正的 cgo 构建由下一步验证。
       - name: Test
-        run: go test ./...
+        run: go test ./internal/...
         env:
-          CGO_ENABLED: "1"
+          CGO_ENABLED: "0"
 
       # 打 tag 时用 tag 号作为程序内显示的版本，其余情况显示 dev-<commit>
       - name: Build universal binary
