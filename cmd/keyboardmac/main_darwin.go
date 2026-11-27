@@ -107,14 +107,21 @@ func main() {
 	C.uiRun()
 }
 
-// countBlock 统计并记录被拦截的按键，同时刷新菜单栏状态。
-// 它在事件监听回调里执行，始终位于主线程。
-func countBlock(vk, scanCode uint32, extended bool, interval time.Duration) {
+// todayCount 返回今日拦截次数，跨天时自动清零。
+// 事件回调与菜单都在主线程，blockedDate 直接读写即可。
+func todayCount() int64 {
 	day := time.Now().Format("2006-01-02")
 	if blockedDate != day {
 		blockedDate = day
 		atomic.StoreInt64(&blockedToday, 0)
 	}
+	return atomic.LoadInt64(&blockedToday)
+}
+
+// countBlock 统计并记录被拦截的按键，同时刷新菜单栏状态。
+// 它在事件监听回调里执行，始终位于主线程。
+func countBlock(vk, scanCode uint32, extended bool, interval time.Duration) {
+	todayCount()
 	atomic.AddInt64(&blockedToday, 1)
 
 	logging.Blocked(vk, scanCode, extended, interval)
@@ -140,7 +147,7 @@ func goPaused() C.int {
 
 //export goBlockedToday
 func goBlockedToday() C.int {
-	return C.int(atomic.LoadInt64(&blockedToday))
+	return C.int(todayCount())
 }
 
 //export goDebounceMS

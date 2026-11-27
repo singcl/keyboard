@@ -135,7 +135,19 @@ func main() {
 
 	var actions = make(map[int]*walk.Action)
 
+	// rollDailyCount 在跨天时把今日拦截计数清零。
+	// 计数在拦截回调里累加、在界面线程读取，两处都要先调用它，
+	// 否则跨天且暂无新拦截时，状态行会一直显示昨天的数字。
+	rollDailyCount := func() {
+		day := time.Now().Format("2006-01-02")
+		if prev, _ := blockedDate.Load().(string); prev != day {
+			blockedDate.Store(day)
+			atomic.StoreInt64(&blockedToday, 0)
+		}
+	}
+
 	updateTip := func() {
+		rollDailyCount()
 		state := "运行中"
 		switch {
 		case userPaused:
@@ -529,11 +541,7 @@ func main() {
 
 	// 统计今日拦截次数，同时写入拦截日志
 	countBlock := func(vk, scanCode uint32, extended bool, interval time.Duration) {
-		day := time.Now().Format("2006-01-02")
-		if prev, _ := blockedDate.Load().(string); prev != day {
-			blockedDate.Store(day)
-			atomic.StoreInt64(&blockedToday, 0)
-		}
+		rollDailyCount()
 		atomic.AddInt64(&blockedToday, 1)
 		logging.Blocked(vk, scanCode, extended, interval)
 	}
