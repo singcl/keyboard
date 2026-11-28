@@ -91,6 +91,15 @@ pub(crate) fn base_cache_dir() -> io::Result<PathBuf> {
 #[cfg(test)]
 static BASE_OVERRIDE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
+/// 测试间串行化：凡读取缓存目录（受 BASE_OVERRIDE 影响）的测试必须先持锁，
+/// 否则「设置覆盖」与「加锁探测」并行交错时，单实例测试的两次加锁会落到
+/// 不同文件上，得到随机的冲突/成功结果（macOS CI 实测踩过）。
+#[cfg(test)]
+pub(crate) fn test_env_lock() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    TEST_ENV.lock().unwrap()
+}
+
 #[cfg(test)]
 fn base_override() -> Option<PathBuf> {
     BASE_OVERRIDE.lock().unwrap().clone()

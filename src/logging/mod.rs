@@ -147,6 +147,8 @@ mod tests {
 
     #[test]
     fn async_write_reaches_file() {
+        // 与其它读缓存目录的测试互斥（覆盖是全局的，并行会互相污染）
+        let _env = crate::config::test_env_lock();
         let dir = std::env::temp_dir().join(format!("kb-plus-logtest-{}", std::process::id()));
         // 把写入线程的「用户缓存目录」指到临时目录（等价于 Go 版 t.Setenv）
         crate::config::set_base_dir_for_tests(&dir);
