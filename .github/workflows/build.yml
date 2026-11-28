@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [master, "feat/**"]
+    branches: [master, "rust", "feat/**"]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -16,42 +16,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          go-version-file: go.mod
-          cache: true
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
 
-      # 测试用纯 Go 模式：internal 各包不依赖 cgo，
-      # 且 cgo 链接出来的测试二进制在新版 macOS 上会因缺少 LC_UUID 无法运行。
-      # 真正的 cgo 构建由下一步验证。
-      - name: Test
-        run: go test ./internal/...
-        env:
-          CGO_ENABLED: "0"
+      - uses: Swatinem/rust-cache@v2
 
-      # 打 tag 时用 tag 号作为程序内显示的版本，其余情况显示 dev-<commit>
+      - name: Test (平台无关模块)
+        run: cargo test --lib --bins
+
+      # 打 tag 时用 tag 号作为程序内显示的版本，其余情况显示 Cargo.toml 版本
       - name: Build universal binary
         run: |
           if [[ "${{ github.ref_name }}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
+            export KEYBOARD_PLUS_VERSION="${GITHUB_REF_NAME#v}"
           fi
           mkdir -p dist
-          for arch in arm64 amd64; do
-            CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s -X main.appVersion=$VERSION" \
-              -o dist/keyboard-plus-$arch ./cmd/keyboardmac
-            CGO_ENABLED=1 GOARCH=$arch go build -tags noupdate -ldflags "-w -s -X main.appVersion=$VERSION" \
-              -o dist/keyboard-plus-slim-$arch ./cmd/keyboardmac
+          for arch in arm64 x86_64; do
+            target="aarch64-apple-darwin"
+            [[ "$arch" == "x86_64" ]] && target="x86_64-apple-darwin"
+            cargo build --release --target "$target" --bins
+            cp "target/$target/release/keyboard-plus" "dist/keyboard-plus-$arch"
+            cargo build --release --target "$target" --no-default-features --bins
+            cp "target/$target/release/keyboard-plus" "dist/keyboard-plus-slim-$arch"
           done
-          lipo -create -output dist/keyboard-plus dist/keyboard-plus-arm64 dist/keyboard-plus-amd64
-          lipo -create -output dist/keyboard-plus-slim dist/keyboard-plus-slim-arm64 dist/keyboard-plus-slim-amd64
+          lipo -create -output dist/keyboard-plus dist/keyboard-plus-arm64 dist/keyboard-plus-x86_64
+          lipo -create -output dist/keyboard-plus-slim dist/keyboard-plus-slim-arm64 dist/keyboard-plus-slim-x86_64
           chmod +x dist/keyboard-plus dist/keyboard-plus-slim
           cd dist
           zip keyboard-plus-macos-universal.zip keyboard-plus
           zip keyboard-plus-macos-universal-slim.zip keyboard-plus-slim
-        env:
-          CGO_ENABLED: "1"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -73,33 +67,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Test
-        run: go test ./...
-        env:
-          CGO_ENABLED: "0"
+        run: cargo test
 
-      # 打 tag 发布时，用 tag 号覆盖 exe 内的版本信息，避免手动改 winres.json
+      # 打 tag 发布时，用 tag 号覆盖 exe 内的版本信息与「检查更新」的比较基准
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          $ver = "${{ github.ref_name }}".TrimStart("v")
-          go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd/keyboard/rsrc.syso --arch amd64 --no-suffix --file-version $ver --product-version $ver
-        env:
-          CGO_ENABLED: "0"
+        shell: bash
+        run: echo "KEYBOARD_PLUS_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Build
         run: |
-          go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
-          go build -tags noupdate -ldflags "-w -s -H windowsgui" -o keyboard-plus-slim.exe ./cmd/keyboard
-        env:
-          CGO_ENABLED: "0"
+          cargo build --release
+          cargo build --release --no-default-features
+          cp target/release/keyboard-plus.exe keyboard-plus.exe
+          cargo build --release --no-default-features
+          cp target/release/keyboard-plus.exe keyboard-plus-slim.exe
 
       - name: Package
+        shell: pwsh
         run: |
           Compress-Archive -Path keyboard-plus.exe, README.md -DestinationPath keyboard-plus-windows-amd64.zip -Force
           Compress-Archive -Path keyboard-plus-slim.exe, README.md -DestinationPath keyboard-plus-windows-amd64-slim.zip -Force

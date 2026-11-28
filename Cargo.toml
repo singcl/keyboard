@@ -1,0 +1,58 @@
+[package]
+name = "keyboard-plus"
+version = "1.2.6"
+edition = "2024"
+description = "键盘防抖：屏蔽键盘误触发的重复按键"
+license = "MIT"
+repository = "https://github.com/singcl/keyboard"
+publish = false
+build = "build.rs"
+
+# 标准版含「检查更新」；精简版用 --no-default-features 编译，不链接 HTTP/TLS，也不访问网络。
+[features]
+default = ["update"]
+update = ["dep:ureq"]
+
+[dependencies]
+png = { version = "0.18", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "3", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Devices_Properties",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+# 图标、清单、版本信息与对话框模板由 build.rs 组装后编译进 exe
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"
+
+# macOS 的菜单栏与事件监听沿用 Objective-C / C 实现；cc 对所有目标声明，
+# 因为 build 脚本按主机编译，只在目标为 macOS 时才真正调用
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

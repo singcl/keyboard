@@ -2,21 +2,22 @@
 setlocal
 cd /d "%~dp0"
 
-set CGO_ENABLED=0
-
-go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
+cargo build --release
 if errorlevel 1 (
     echo.
     echo [build] failed: keyboard-plus.exe
     exit /b 1
 )
+copy /y target\release\keyboard-plus.exe keyboard-plus.exe >nul
 
-go build -tags noupdate -ldflags "-w -s -H windowsgui" -o keyboard-plus-slim.exe ./cmd/keyboard
+cargo build --release --no-default-features
 if errorlevel 1 (
     echo.
     echo [build] failed: keyboard-plus-slim.exe
     exit /b 1
 )
+copy /y target\release\keyboard-plus.exe keyboard-plus-slim.exe >nul
+cargo build --release >nul
 
 echo.
 echo [build] ok: %cd%\keyboard-plus.exe

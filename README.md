@@ -14,7 +14,7 @@
 
 ## 来源与致谢
 
-本项目源自 [garfeng/keyboard](https://github.com/garfeng/keyboard)（MIT 协议）：原作者用 C++ 实现了最初的版本。本仓库在其基础上用 Go 重写了全部代码，并增加了拦截日志、设备识别与目标键盘、开机自启、托盘/菜单栏界面以及 macOS 支持。
+本项目源自 [garfeng/keyboard](https://github.com/garfeng/keyboard)（MIT 协议）：原作者用 C++ 实现了最初的版本。本仓库在其基础上先用 Go 重写了全部代码，并增加了拦截日志、设备识别与目标键盘、开机自启、托盘/菜单栏界面以及 macOS 支持；2026 年 11 月起改用 Rust 实现（见「更新记录」）。
 
 解压后，双击里面的 keyboard-plus.exe 运行。
 
@@ -57,13 +57,13 @@ macOS 版本下载后直接运行 `keyboard-plus`，图标出现在菜单栏。�
 | 版本 | 文件名 | 说明 |
 | --- | --- | --- |
 | 标准版 | `keyboard-plus-windows-amd64.zip`、`keyboard-plus-macos-universal.zip` | 含「检查更新」，启动时会访问 `api.github.com` |
-| 精简版 | 文件名带 `-slim` | 去掉联网检查（不链接 `net/http`），体积约为标准版的一半，不访问网络；其余功能完全一致 |
+| 精简版 | 文件名带 `-slim` | 去掉联网检查（不链接任何 HTTP/TLS 代码），体积约为标准版的四分之一，不访问网络；其余功能完全一致 |
 
 两个版本的配置、日志与开机自启共用，同时安装时也只会运行一个实例；想彻底断网使用就选精简版。
 
 ## 构建
 
-Windows 需要 Go 1.22+，项目无 cgo 依赖，在 Windows 下执行：
+需要 Rust 1.85+（edition 2024）。Windows 侧还需 MSVC 工具链（Visual Studio Build Tools + Windows SDK），即 `rustup` 默认安装的 `x86_64-pc-windows-msvc` 目标；无其他第三方构建依赖。
 
 ```
 build.bat      # Windows cmd / PowerShell
@@ -73,12 +73,16 @@ build.bat      # Windows cmd / PowerShell
 或手动执行：
 
 ```
-CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd/keyboard
+cargo build --release
 ```
 
-两个脚本会同时产出标准版 `keyboard-plus.exe` 与精简版 `keyboard-plus-slim.exe`；`-H windowsgui` 表示运行时不显示控制台窗口。
+两个脚本会同时产出标准版 `keyboard-plus.exe` 与精简版 `keyboard-plus-slim.exe`；`windows_subsystem` 属性保证运行时不显示控制台窗口。
 
-加 `-tags noupdate` 可编译精简版（去掉「检查更新」，不链接 `net/http`，体积约为一半）。
+精简版用 `--no-default-features` 编译（去掉「检查更新」，不链接任何 HTTP/TLS 代码，体积约为标准版的四分之一）：
+
+```
+cargo build --release --no-default-features
+```
 
 ## Git 代理
 
@@ -100,50 +104,51 @@ Shell（Git Bash / macOS / Linux）：
 ./git-proxy.sh unset
 ```
 
-如果修改了 `internal/assets/icon.ico`、`internal/assets/keyboard.manifest` 或 `winres/winres.json`（版本号、文件描述等），需要重新生成资源后再编译：
+图标、清单与版本信息由 `build.rs` 组装成 RC 资源后编译进 exe（版本号取 `KEYBOARD_PLUS_VERSION` 环境变量，缺省用 `Cargo.toml` 的版本）；修改 `assets/` 下的资源无需额外步骤，重新 `cargo build` 即可。
+
+macOS 版本沿用 Objective-C / C 实现的菜单栏与事件监听（`native/macos/`），由 `cc` 在构建时一并编译，需要 Xcode 命令行工具：
 
 ```
-go run github.com/tc-hib/go-winres@latest make --in winres/winres.json --out cmd/keyboard/rsrc.syso --arch amd64 --no-suffix
-```
-
-macOS 版本使用 cgo（Cocoa + CoreGraphics），需要 Xcode 命令行工具：
-
-```
-CGO_ENABLED=1 go build -ldflags "-w -s" -o keyboard-plus ./cmd/keyboardmac
+cargo build --release --bins
 ```
 
 同时支持 Apple Silicon 与 Intel 的通用二进制：
 
 ```
-for arch in arm64 amd64; do
-  CGO_ENABLED=1 GOARCH=$arch go build -ldflags "-w -s" -o keyboard-plus-$arch ./cmd/keyboardmac
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+for target in aarch64-apple-darwin x86_64-apple-darwin; do
+  cargo build --release --target $target --bins
 done
-lipo -create -output keyboard-plus keyboard-plus-arm64 keyboard-plus-amd64
+lipo -create -output keyboard-plus \
+  target/aarch64-apple-darwin/release/keyboard-plus \
+  target/x86_64-apple-darwin/release/keyboard-plus
 ```
 
-精简版同样加 `-tags noupdate`。
+精简版同样加 `--no-default-features`。
 
 ## 项目结构
 
 ```
 .
-├── cmd/
-│   ├── keyboard/              # Windows 入口：托盘图标、菜单（walk）
-│   │   └── rsrc.syso          # 图标、清单与版本信息（go-winres 生成）
-│   └── keyboardmac/           # macOS 入口：菜单栏图标（Cocoa）与 Go 桥接
-├── internal/
-│   ├── assets/                # 图标与清单；icon.png 通过 go:embed 编入程序
-│   ├── autostart/             # 开机自启（注册表 Run 键 / LaunchAgent）
-│   ├── config/                # 配置持久化（防抖阈值、目标键盘）
-│   ├── devices/               # 键盘设备识别（Raw Input）
-│   ├── hook/                  # 键盘拦截（Win32 低级钩子 / CGEventTap）与判重逻辑
+├── assets/                    # 图标与清单；icon.png 编入程序，其余经 build.rs 编进资源
+├── native/macos/              # macOS 的 Objective-C / C 实现（菜单栏、CGEventTap）
+├── src/
+│   ├── main.rs                # 平台入口分发
+│   ├── tray/                  # Windows 界面：托盘图标、菜单、阈值对话框、日志窗口
+│   ├── macos/                 # macOS 入口：与 native/macos 的 FFI 桥接
+│   ├── hook/                  # 键盘拦截（WH_KEYBOARD_LL / CGEventTap）与判重逻辑
+│   ├── devices/               # 键盘设备识别（Raw Input）与分组展示
 │   ├── logging/               # 拦截日志（异步写入、轮转、清空）
-│   └── singleinstance/        # 单实例（互斥量 / 文件锁）
-├── winres/
-│   └── winres.json            # 图标、清单与版本信息资源定义
+│   ├── autostart/             # 开机自启（注册表 Run 键 / LaunchAgent）
+│   ├── singleinstance.rs      # 单实例（互斥量 / 文件锁）
+│   ├── config.rs              # 配置持久化（防抖阈值、目标键盘）
+│   ├── update.rs              # 检查更新（标准版）；精简版编译为空实现
+│   ├── stats.rs               # 今日拦截计数（跨天自动清零）
+│   └── timeutil.rs            # 本地时间格式化（日志时间戳、跨天判断）
+├── build.rs                   # 版本注入、Windows 资源编译、macOS 原生源码编译
 ├── .github/workflows/build.yml # CI：Windows / macOS 构建与发布
 ├── build.bat / build.sh       # 本地构建脚本
-├── go.mod
+├── Cargo.toml
 └── README.md
 ```
 
@@ -176,9 +181,11 @@ macOS 版本使用 `CGEventTap` 做主键拦截，系统版本要求 macOS 10.15
 * 开机自启写入 `~/Library/LaunchAgents/com.singcl.keyboard-plus.plist`，下次登录时生效；取消勾选会删除该文件。
 * 日志与配置文件位于 `~/Library/Caches/keyboard-plus/`。
 
-平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `_windows.go` / `_darwin.go` 拆分，Windows 部分仍是纯 Go；macOS 的界面与事件监听通过 cgo 调用 Cocoa / CoreGraphics。
+平台相关代码（键盘钩子、开机自启、单实例、按键名解析）都按 `windows.rs` / `macos.rs` / `stub.rs` 拆分，Windows 部分只依赖 `windows` crate；macOS 的界面与事件监听沿用 Objective-C / C，经 FFI 调用。
 
 ## 更新记录
+
+* 2026年11月：改用 Rust 重写全部代码（Windows 界面不再依赖 walk，改为直接调用 Win32 API；macOS 的 Objective-C / C 实现保留）。配置、日志与开机自启的存储位置和格式不变，老用户升级无需重新设置
 
 * 2026年11月：新增「检查更新」（标准版），并提供不含联网检查的精简版（`-slim`）
 

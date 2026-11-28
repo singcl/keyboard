@@ -1,0 +1,71 @@
+// Cocoa 界面的 FFI 声明：cocoa_darwin.m 实现这些入口，Rust 在主线程依次调用。
+
+use std::ffi::CString;
+
+// SAFETY 注释统一放在调用处；原型与 cocoa_darwin.m 一一对应。
+extern "C" {
+    fn uiInit(
+        normal_png: *const u8,
+        normal_len: i32,
+        gray_png: *const u8,
+        gray_len: i32,
+        version: *const i8,
+        update_enabled: i32,
+    );
+    fn uiRun();
+    fn uiRefresh();
+    fn uiAlert(title: *const i8, message: *const i8);
+    fn uiUpdateAlert(title: *const i8, message: *const i8, url: *const i8);
+    fn uiPermissionAlert();
+}
+
+pub(crate) fn init(normal: &[u8], gray: &[u8], version: &str, update_enabled: bool) {
+    let v = cstr(version);
+    // SAFETY: 字符串与字节缓冲区均在调用期间有效；uiInit 内部拷贝图片数据。
+    unsafe {
+        uiInit(
+            normal.as_ptr(),
+            normal.len() as i32,
+            gray.as_ptr(),
+            gray.len() as i32,
+            v.as_ptr() as *const i8,
+            i32::from(update_enabled),
+        );
+    }
+}
+
+pub(crate) fn run() {
+    // SAFETY: 无参调用，进入 Cocoa 事件循环后不再返回。
+    unsafe { uiRun() }
+}
+
+pub(crate) fn refresh() {
+    // SAFETY: 无参调用；由事件回调线程（主线程）触发。
+    unsafe { uiRefresh() }
+}
+
+pub(crate) fn alert(title: &str, message: &str) {
+    let t = cstr(title);
+    let m = cstr(message);
+    // SAFETY: C 字符串在调用期间有效。
+    unsafe { uiAlert(t.as_ptr() as *const i8, m.as_ptr() as *const i8) }
+}
+
+pub(crate) fn update_alert(title: &str, message: &str, url: &str) {
+    let t = cstr(title);
+    let m = cstr(message);
+    let u = cstr(url);
+    // SAFETY: C 字符串在调用期间有效；uiUpdateAlert 内部切换回主线程弹窗。
+    unsafe {
+        uiUpdateAlert(t.as_ptr() as *const i8, m.as_ptr() as *const i8, u.as_ptr() as *const i8)
+    }
+}
+
+pub(crate) fn permission_alert() {
+    // SAFETY: 无参调用。
+    unsafe { uiPermissionAlert() }
+}
+
+fn cstr(s: &str) -> CString {
+    CString::new(s).unwrap_or_default()
+}
