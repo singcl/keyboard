@@ -3,7 +3,7 @@
 use std::ffi::CString;
 
 // SAFETY 注释统一放在调用处；原型与 cocoa_darwin.m 一一对应。
-extern "C" {
+unsafe extern "C" {
     fn uiInit(
         normal_png: *const u8,
         normal_len: i32,

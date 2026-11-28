@@ -285,6 +285,6 @@ static void refreshUI(void) {
     }
 
     NSString *tip = [NSString stringWithFormat:@"键盘防抖 %dms · %@", ms, stateText];
-    [gStatusItem setToolTip:tip];
+    // NSStatusItem 的 setToolTip 自 10.14 起废弃，改用 button.toolTip（系统要求 10.15+）
     [[gStatusItem button] setToolTip:tip];
 }

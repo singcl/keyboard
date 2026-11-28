@@ -103,7 +103,6 @@ use std::os::windows::ffi::OsStrExt;
 mod tests {
     use super::*;
 
-    #[cfg(windows)]
     #[test]
     fn second_acquire_fails() {
         let name = format!("keyboard-test-mutex-{}", std::process::id());

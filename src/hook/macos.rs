@@ -18,7 +18,7 @@ static ON_BLOCK: AtomicI32 = AtomicI32::new(0); // 是否已注入回调（用�
 // handler 本体保存在线程安全的静态槽里。
 static HANDLER: std::sync::Mutex<Option<BlockHandler>> = std::sync::Mutex::new(None);
 
-extern "C" {
+unsafe extern "C" {
     fn kbdTapStart() -> i32;
     fn kbdTapStop();
     fn kbdAccessTrusted() -> i32;
@@ -56,7 +56,7 @@ pub fn stop() {
 ///
 /// # Safety
 /// 由 C 层（hook_darwin.c 的 keyboardTapCallback）调用，签名必须与 bridge.h 一致。
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn goHandleKeyCode(key_code: u32, down: i32, auto_repeat: i32) -> i32 {
     if paused() || down == 0 || auto_repeat != 0 {
         return 0;

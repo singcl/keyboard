@@ -3,9 +3,6 @@
 // 不引入 chrono 之类的依赖：Go 版用的是本地时间，std 只有 UTC，
 // 因此按平台取本地时间——Windows 用 GetLocalTime，macOS 用 libc 的 localtime_r。
 
-#[cfg(target_os = "macos")]
-use std::sync::atomic::{AtomicI64, Ordering};
-
 /// 一次本地时间采样，字段含义与 SYSTEMTIME / tm 一致。
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct LocalTime {

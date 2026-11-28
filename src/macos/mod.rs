@@ -85,7 +85,7 @@ pub fn main_macos() {
 // ---------- 菜单回调（Cocoa 通过 bridge.h 调用） ----------
 
 /// 菜单栏状态：0 运行中、1 已暂停、2 未生效（缺少权限）。
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goState() -> i32 {
     if TAP_ACTIVE.load(Ordering::Relaxed) == 0 {
         return 2;
@@ -93,22 +93,22 @@ pub extern "C" fn goState() -> i32 {
     goPaused()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goPaused() -> i32 {
     USER_PAUSED.load(Ordering::Relaxed)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goBlockedToday() -> i32 {
     stats::today_count().min(i32::MAX as i64) as i32
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goDebounceMS() -> i32 {
     cfg().debounce_ms
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goTogglePause() {
     let now_paused = !cfg().paused;
     set_cfg(|c| c.paused = now_paused);
@@ -121,7 +121,7 @@ pub extern "C" fn goTogglePause() {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goSetDebounce(ms: i32) {
     if !(10..=1000).contains(&ms) {
         ui::alert("数值无效", "请输入 10-1000 之间的整数。");
@@ -132,12 +132,12 @@ pub extern "C" fn goSetDebounce(ms: i32) {
     logging::event(&format!("防抖阈值调整为 {ms}ms"));
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goAutostartEnabled() -> i32 {
     bool_to_i32(autostart::enabled())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goToggleAutostart() {
     let enable = !autostart::enabled();
     if let Err(e) = autostart::set(enable) {
@@ -151,7 +151,7 @@ pub extern "C" fn goToggleAutostart() {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goOpenLog() {
     let path = match logging::path() {
         Ok(p) => p,
@@ -171,7 +171,7 @@ pub extern "C" fn goOpenLog() {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goRevealConfig() {
     let path = match config::path() {
         Ok(p) => p,
@@ -187,13 +187,13 @@ pub extern "C" fn goRevealConfig() {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goQuit() {
     hook::stop();
     std::process::exit(0);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn goCheckUpdate() {
     check_update(true);
 }
@@ -251,14 +251,16 @@ fn gray_png(src: &[u8]) -> Vec<u8> {
     }
 
     let mut out = Vec::new();
-    let mut encoder = png::Encoder::new(&mut out, w, h);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let Ok(mut writer) = encoder.write_header() else {
-        return src.to_vec();
-    };
-    if writer.write_image_data(&buf).is_err() {
-        return src.to_vec();
+    {
+        let mut encoder = png::Encoder::new(&mut out, w, h);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let Ok(mut writer) = encoder.write_header() else {
+            return src.to_vec();
+        };
+        if writer.write_image_data(&buf).is_err() {
+            return src.to_vec();
+        }
     }
     out
 }

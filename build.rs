@@ -4,9 +4,11 @@
 // - Windows：用版本号生成 RC 资源（图标、清单、双语言版本信息）后经 embed-resource 编译。
 // - macOS：把 native/macos 下的 Objective-C / C 源文件交给 cc 编译（沿用 Go 版的 cgo 源文件）。
 
-use std::env;
+#[cfg(windows)]
 use std::fs;
+#[cfg(windows)]
 use std::path::PathBuf;
+use std::env;
 
 fn main() {
     let version = version();
@@ -46,6 +48,7 @@ fn build_windows(version: &str) {
 fn build_windows(_version: &str) {}
 
 // VERSIONINFO 与 go 版 winres.json 保持一致：英文与简体中文两套字符串。
+#[cfg(windows)]
 fn windows_rc(version: &str) -> String {
     let mut v = version.to_string();
     while v.matches('.').count() < 3 {
