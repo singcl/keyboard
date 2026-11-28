@@ -1,8 +1,8 @@
 ## 本次更新
 
-- 全新品牌图标：绿色键盘板造型，更契合「键盘工具」的定位，深浅色任务栏下都醒目
-- 暂停状态更直观：暂停时托盘图标由绿色切换为珊瑚色（此前为灰度图），Windows 与 macOS 表现一致
-- 功能、配置、日志与开机自启均无变化，直接替换升级即可
+- 新增「图标样式」切换（标准版）：托盘菜单可自主选择「键盘板」或「脉冲屏」两套图标，选择自动保存、重启保留
+- 第二套「脉冲屏」：绿底白脉冲（运行中）、珊瑚底薄荷脉冲（暂停），Windows 与 macOS 表现一致
+- 精简版固定使用「键盘板」样式，其余功能不变，直接替换升级即可
 
 ## 下载
 
@@ -22,4 +22,4 @@ Go 实现保留在 [`go`](https://github.com/singcl/keyboard/tree/go) 分支，�
 
 详细说明与各平台功能差异见 [README](https://github.com/singcl/keyboard#readme)。
 
-**完整改动**：https://github.com/singcl/keyboard/commits/v2.1.0
+**完整改动**：https://github.com/singcl/keyboard/commits/v2.2.0
