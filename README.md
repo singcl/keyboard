@@ -1,6 +1,6 @@
 # 防止某键盘误触发
 
-![keyboard-plus](assets/banner.png)
+![keyboard-plus](assets/banner.webp)
 
 新买的键盘用了几个月，一个问题越来越明显，就是误触发，按一次，重复响应多次，随时随地敲错特别烦。
 
