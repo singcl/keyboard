@@ -23,7 +23,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Test (平台无关模块)
-        run: cargo test --lib --bins
+        run: cargo test
 
       # 打 tag 时用 tag 号作为程序内显示的版本，其余情况显示 Cargo.toml 版本
       - name: Build universal binary
