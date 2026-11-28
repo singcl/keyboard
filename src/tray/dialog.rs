@@ -4,13 +4,17 @@
 
 use std::cell::Cell;
 
-use windows::core::PCWSTR;
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     GetStockObject, GetSysColorBrush, COLOR_WINDOW, DEFAULT_GUI_FONT, HBRUSH, HGDIOBJ,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Controls::{EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET};
+use windows::Win32::UI::Controls::{
+    TaskDialogIndirect, EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET, TASKDIALOGCONFIG,
+    TASKDIALOGCONFIG_0, TASKDIALOG_BUTTON, TASKDIALOG_FLAGS, TD_INFORMATION_ICON,
+    TDF_ALLOW_DIALOG_CANCELLATION, TDF_POSITION_RELATIVE_TO_WINDOW, TDF_USE_COMMAND_LINKS,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, SetFocus, VK_ESCAPE, VK_RETURN, VK_TAB,
 };
@@ -25,9 +29,18 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_CLIENTEDGE, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
 };
 
+use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::WindowsAndMessaging::SHOW_WINDOW_CMD;
+use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
 use super::util;
 
 const WM_APP_DONE: u32 = 0x8010; // WM_APP + 16
+
+// 「关于」对话框的按钮 id
+const ID_OPEN_PROJECT: i32 = 1001;
+const ID_OPEN_SITE: i32 = 1002;
+const ID_ABOUT_CLOSE: i32 = 1003;
 
 const ID_LABEL: i32 = 100;
 const ID_EDIT: i32 = 101;
@@ -41,6 +54,83 @@ thread_local! {
     // EDIT 原窗口过程，用于子类化捕获 Enter/Esc/Tab
     static EDIT_PROC: Cell<isize> = const { Cell::new(0) };
     static DLG_HWND: Cell<isize> = const { Cell::new(0) };
+}
+
+/// 「关于」对话框：版本、作者与项目/个人主页；命令链接按钮直接打开对应页面。
+pub fn show_about(owner: HWND) {
+    // 宽字符串先备好再进调用；TaskDialogIndirect 内部跑模态消息循环，
+    // 不得跨越任何 with_app / RefCell 借用（见 mod.rs 的不变量）。
+    let title = util::wide("关于 keyboard-plus");
+    let instruction = util::wide(&format!("keyboard-plus v{}", crate::APP_VERSION));
+    let content = util::wide(&format!(
+        "键盘防抖工具 · MIT License
+
+作者：{}
+GitHub：github.com/singcl
+个人网站：imcoco.top",
+        crate::AUTHOR
+    ));
+    let btn_project = util::wide("打开项目主页");
+    let btn_site = util::wide("打开个人网站");
+    let btn_close = util::wide("关闭");
+
+    let buttons = [
+        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_PROJECT, pszButtonText: PCWSTR(btn_project.as_ptr()) },
+        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_SITE, pszButtonText: PCWSTR(btn_site.as_ptr()) },
+        TASKDIALOG_BUTTON { nButtonID: ID_ABOUT_CLOSE, pszButtonText: PCWSTR(btn_close.as_ptr()) },
+    ];
+    let config = TASKDIALOGCONFIG {
+        cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
+        hwndParent: owner,
+        dwFlags: TASKDIALOG_FLAGS(
+            TDF_USE_COMMAND_LINKS.0 | TDF_ALLOW_DIALOG_CANCELLATION.0 | TDF_POSITION_RELATIVE_TO_WINDOW.0,
+        ),
+        pszWindowTitle: PCWSTR(title.as_ptr()),
+        Anonymous1: TASKDIALOGCONFIG_0 { pszMainIcon: TD_INFORMATION_ICON },
+        pszMainInstruction: PCWSTR(instruction.as_ptr()),
+        pszContent: PCWSTR(content.as_ptr()),
+        cButtons: buttons.len() as u32,
+        pButtons: buttons.as_ptr(),
+        nDefaultButton: ID_ABOUT_CLOSE,
+        ..Default::default()
+    };
+
+    let mut button = 0i32;
+    // SAFETY: config 与按钮数组均在调用期间有效；输出指针为局部变量。
+    let r = unsafe { TaskDialogIndirect(&config, Some(&mut button), None, None) };
+    if r.is_err() {
+        // TaskDialog 极少失败（如无 comctl v6 上下文），退回普通消息框兜底
+        util::msg_box_info(
+            Some(owner),
+            &String::from_utf16_lossy(&title),
+            &String::from_utf16_lossy(&content),
+        );
+        return;
+    }
+    match button {
+        ID_OPEN_PROJECT => open_url(Some(owner), crate::PROJECT_URL),
+        ID_OPEN_SITE => open_url(Some(owner), crate::AUTHOR_SITE_URL),
+        _ => {}
+    }
+}
+
+/// 用 ShellExecuteW 打开 URL / 路径（与 mod.rs 打开配置文件位置同一模式）。
+pub fn open_url(owner: Option<HWND>, url: &str) {
+    let target = util::wide(url);
+    // SAFETY: 目标字符串在调用期间有效。
+    let r = unsafe {
+        ShellExecuteW(
+            owner,
+            PCWSTR(w!("open").as_ptr()),
+            util::pcw(&target),
+            None,
+            None,
+            SHOW_WINDOW_CMD(SW_SHOWNORMAL.0),
+        )
+    };
+    if r.0 as usize <= 32 {
+        util::msg_box_error(owner, "打开链接失败", &format!("无法打开：{url}"));
+    }
 }
 
 /// 弹出自定义阈值对话框，返回用户确认的毫秒数；取消时返回 None。

@@ -25,6 +25,11 @@ void goCheckUpdate(void);
 void goSetIconStyle(int style);
 int goIconStyle(void);
 
+// 「关于」对话框：打开项目主页 / 个人网站（任一 URL 为 NULL 时隐藏对应按钮）
+void uiAboutAlert(const char *title, const char *message,
+                  const char *projectURL, const char *siteURL);
+void goAbout(void);
+
 // CGEventTap 回调：返回 1 表示拦截这次按键
 int goHandleKeyCode(uint32_t keyCode, int down, int autoRepeat);
 

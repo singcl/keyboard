@@ -85,6 +85,10 @@ static void refreshUI(void);
     refreshUI();
 }
 
+- (void)showAbout:(id)sender {
+    goAbout();
+}
+
 - (void)quitApp:(id)sender {
     goQuit();
 }
@@ -179,6 +183,8 @@ void uiInit(const void *normalPNG, int normalLen, const void *pausedPNG, int pau
         }
         [menu addItem:[NSMenuItem separatorItem]];
 
+        addItem(menu, @"关于 keyboard-plus…", @selector(showAbout:));
+
         NSMenuItem *versionItem = [[NSMenuItem alloc]
             initWithTitle:[NSString stringWithUTF8String:version] action:nil keyEquivalent:@""];
         [versionItem setEnabled:NO];
@@ -244,6 +250,42 @@ void uiUpdateAlert(const char *title, const char *message, const char *url) {
             }
         }
     });
+}
+
+// 「关于」：NSAlert 三按钮，前两个分别打开项目主页与个人网站。
+void uiAboutAlert(const char *title, const char *message,
+                  const char *projectURL, const char *siteURL) {
+    @autoreleasepool {
+        [NSApplication sharedApplication];
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:[NSString stringWithUTF8String:title]];
+        [alert setInformativeText:[NSString stringWithUTF8String:message]];
+
+        if (projectURL != NULL) {
+            [alert addButtonWithTitle:@"打开项目主页"];
+        }
+        if (siteURL != NULL) {
+            [alert addButtonWithTitle:@"打开个人网站"];
+        }
+        [alert addButtonWithTitle:@"好"];
+        [NSApp activateIgnoringOtherApps:YES];
+
+        NSModalResponse resp = [alert runModal];
+        // 按标题定位按钮，避免某个 URL 缺失时响应序号漂移
+        NSString *url = nil;
+        NSUInteger projectIdx = [alert.buttons indexOfObjectWithTitle:@"打开项目主页"];
+        NSUInteger siteIdx = [alert.buttons indexOfObjectWithTitle:@"打开个人网站"];
+        if (projectURL != NULL && projectIdx != NSNotFound
+            && resp == NSAlertFirstButtonReturn + (NSModalResponse)projectIdx) {
+            url = [NSString stringWithUTF8String:projectURL];
+        } else if (siteURL != NULL && siteIdx != NSNotFound
+            && resp == NSAlertFirstButtonReturn + (NSModalResponse)siteIdx) {
+            url = [NSString stringWithUTF8String:siteURL];
+        }
+        if (url != nil) {
+            [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+        }
+    }
 }
 
 void uiPermissionAlert(void) {

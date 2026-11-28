@@ -25,6 +25,7 @@ pub mod ids {
     pub const CHECK_UPDATE: u16 = 123;
     pub const VERSION: u16 = 124;
     pub const EXIT: u16 = 125;
+    pub const ABOUT: u16 = 126;
     pub const ICON_STYLE_BASE: u16 = 130; // 130=键盘板 131=脉冲屏（标准版才有此子菜单）
 }
 

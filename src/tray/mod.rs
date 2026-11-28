@@ -497,6 +497,7 @@ fn handle_command(hwnd: HWND, id: u16) {
                 util::msg_box_error(Some(hwnd), "清空日志失败", &e.to_string());
             }
         }
+        ids::ABOUT => dialog::show_about(hwnd),
         ids::CHECK_UPDATE => check_update(true),
         ids::EXIT => unsafe {
             PostQuitMessage(0);
@@ -720,6 +721,7 @@ fn build_menus() {
     if update::enabled() {
         menu::item(root, menu::ids::CHECK_UPDATE, "检查更新…", menu::FLAG_STRING);
     }
+    menu::item(root, menu::ids::ABOUT, "关于…", menu::FLAG_STRING);
     menu::item(root, menu::ids::VERSION, &format!("版本 v{APP_VERSION}"), menu::FLAG_DISABLED);
     menu::separator(root);
     menu::item(root, menu::ids::EXIT, "退出", menu::FLAG_STRING);

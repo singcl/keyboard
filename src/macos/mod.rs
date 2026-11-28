@@ -202,6 +202,24 @@ pub extern "C" fn goQuit() {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn goAbout() {
+    ui::about(
+        "关于 keyboard-plus",
+        &format!(
+            "keyboard-plus v{APP_VERSION}
+键盘防抖工具 · MIT License
+
+作者：{}
+GitHub：github.com/singcl
+个人网站：imcoco.top",
+            crate::AUTHOR
+        ),
+        crate::PROJECT_URL,
+        crate::AUTHOR_SITE_URL,
+    );
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn goIconStyle() -> i32 {
     CFG.lock().unwrap().as_ref().map_or(0, |c| c.icon_style as i32)
 }

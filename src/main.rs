@@ -22,6 +22,11 @@ mod tray;
 // 程序版本：发布构建由 build.rs 注入（CI 的 KEYBOARD_PLUS_VERSION，否则 Cargo.toml 版本）。
 pub const APP_VERSION: &str = env!("APP_VERSION");
 
+// 作者与项目链接：「关于」对话框（tray::dialog::show_about / macos goAbout）共用。
+pub const AUTHOR: &str = "singcl";
+pub const PROJECT_URL: &str = "https://github.com/singcl/keyboard";
+pub const AUTHOR_SITE_URL: &str = "https://imcoco.top";
+
 #[cfg(windows)]
 fn main() {
     let (_guard, ok) = singleinstance::acquire("keyboard-plus");

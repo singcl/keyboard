@@ -21,6 +21,12 @@ unsafe extern "C" {
     fn uiAlert(title: *const i8, message: *const i8);
     fn uiUpdateAlert(title: *const i8, message: *const i8, url: *const i8);
     fn uiPermissionAlert();
+    fn uiAboutAlert(
+        title: *const i8,
+        message: *const i8,
+        project_url: *const i8,
+        site_url: *const i8,
+    );
 }
 
 pub(crate) fn init(
@@ -55,6 +61,17 @@ pub(crate) fn init(
 pub(crate) fn run() {
     // SAFETY: 无参调用，进入 Cocoa 事件循环后不再返回。
     unsafe { uiRun() }
+}
+
+pub(crate) fn about(title: &str, message: &str, project_url: &str, site_url: &str) {
+    let t = cstr(title);
+    let m = cstr(message);
+    let u1 = cstr(project_url);
+    let u2 = cstr(site_url);
+    // SAFETY: 字符串在调用期间有效。
+    unsafe {
+        uiAboutAlert(t.as_ptr() as *const i8, m.as_ptr() as *const i8, u1.as_ptr() as *const i8, u2.as_ptr() as *const i8);
+    }
 }
 
 pub(crate) fn refresh() {
