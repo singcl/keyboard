@@ -183,7 +183,7 @@ void uiInit(const void *normalPNG, int normalLen, const void *pausedPNG, int pau
         }
         [menu addItem:[NSMenuItem separatorItem]];
 
-        addItem(menu, @"关于 keyboard-plus…", @selector(showAbout:));
+        addItem(menu, @"关于作者…", @selector(showAbout:));
 
         NSMenuItem *versionItem = [[NSMenuItem alloc]
             initWithTitle:[NSString stringWithUTF8String:version] action:nil keyEquivalent:@""];

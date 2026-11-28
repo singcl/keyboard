@@ -204,14 +204,14 @@ pub extern "C" fn goQuit() {
 #[unsafe(no_mangle)]
 pub extern "C" fn goAbout() {
     ui::about(
-        "关于 keyboard-plus",
+        "关于作者",
         &format!(
             "keyboard-plus v{APP_VERSION}
 键盘防抖工具 · MIT License
-
 作者：{}
+
 GitHub：github.com/singcl
-个人主页：imcoco.top",
+个人主页：https://imcoco.top",
             crate::AUTHOR
         ),
         crate::PROJECT_URL,

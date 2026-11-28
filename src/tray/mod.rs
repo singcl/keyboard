@@ -721,7 +721,7 @@ fn build_menus() {
     if update::enabled() {
         menu::item(root, menu::ids::CHECK_UPDATE, "检查更新…", menu::FLAG_STRING);
     }
-    menu::item(root, menu::ids::ABOUT, "关于…", menu::FLAG_STRING);
+    menu::item(root, menu::ids::ABOUT, "关于作者…", menu::FLAG_STRING);
     menu::item(root, menu::ids::VERSION, &format!("版本 v{APP_VERSION}"), menu::FLAG_DISABLED);
     menu::separator(root);
     menu::item(root, menu::ids::EXIT, "退出", menu::FLAG_STRING);

@@ -44,22 +44,24 @@ thread_local! {
     static DLG_HWND: Cell<isize> = const { Cell::new(0) };
 }
 
-/// 「关于」对话框：版本、作者与链接；样式与「检查更新」弹窗一致（标准消息框），
+/// 「关于作者」对话框：版本、作者与链接；样式与「检查更新」弹窗一致（标准消息框），
 /// 「是」打开项目主页。
 pub fn show_about(owner: HWND) {
+    // 消息框宽度由最长文本行决定：给各行补尾随空格，让窗口更舒展
+    const PAD: &str = "                        ";
     let msg = format!(
-        "keyboard-plus v{}
-键盘防抖工具 · MIT License
-作者：{}
+        "keyboard-plus v{0}{PAD}
+键盘防抖工具 · MIT License{PAD}
+作者：{1}{PAD}
 
-GitHub：github.com/singcl
-个人主页：imcoco.top
+GitHub：github.com/singcl{PAD}
+个人主页：https://imcoco.top{PAD}
 
-是否打开项目主页？",
+是否打开项目主页？{PAD}",
         crate::APP_VERSION,
         crate::AUTHOR
     );
-    if util::msg_box_question(Some(owner), "关于 keyboard-plus", &msg) {
+    if util::msg_box_question(Some(owner), "关于作者", &msg) {
         open_url(Some(owner), crate::PROJECT_URL);
     }
 }
