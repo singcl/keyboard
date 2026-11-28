@@ -67,6 +67,8 @@ fn enqueue(e: Event) {
 }
 
 /// 删除日志文件（含轮转备份）。
+// 仅 Windows 托盘有「清空日志」菜单项；macOS 版没有该功能（与 Go 版一致）。
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn clear() -> io::Result<()> {
     let path = path()?;
     match fs::remove_file(&path) {

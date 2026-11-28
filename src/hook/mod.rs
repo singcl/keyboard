@@ -33,6 +33,8 @@ static DELAY_NANOS: AtomicI64 = AtomicI64::new(100_000_000); // 默认 10 次/�
 static PAUSED: AtomicBool = AtomicBool::new(false);
 
 // 记录每个按键当前是否处于按下状态，用于区分「自动重复」与「重新按下」。
+// 仅 Windows 回调使用；macOS 的 CGEvent 直接给出 autoRepeat 标志。
+#[cfg_attr(not(windows), allow(dead_code))]
 static KEY_DOWN: [AtomicBool; 256] = {
     #[allow(clippy::declare_interior_mutable_const)]
     const FALSE: AtomicBool = AtomicBool::new(false);
@@ -67,6 +69,7 @@ pub(crate) fn paused() -> bool {
 }
 
 /// 在按键抬起时清理按下状态，各平台实现共用。
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn record_key_up(vk: u32) {
     if vk < 256 {
         KEY_DOWN[vk as usize].store(false, Ordering::Relaxed);
@@ -94,10 +97,12 @@ pub(crate) fn should_block_now(vk: u32) -> Option<Duration> {
 }
 
 /// 读出某键当前是否处于按下状态（供 Windows 回调区分自动重复）。
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn key_is_down(vk: u32) -> bool {
     vk < 256 && KEY_DOWN[vk as usize].load(Ordering::Relaxed)
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn set_key_down(vk: u32, down: bool) {
     if vk < 256 {
         KEY_DOWN[vk as usize].store(down, Ordering::Relaxed);

@@ -3,6 +3,10 @@
 // 注意：低级键盘钩子拿不到设备信息，因此这里只能识别设备，不能按设备拦截。
 // 枚举能力由各平台实现提供：Windows 见 devices::windows（Raw Input），
 // 其他平台目前为占位实现；设备分组、文本整理等逻辑是平台无关的。
+//
+// macOS 没有设备识别与目标键盘功能，本模块绝大多数条目仅被 Windows 界面
+// 使用；实现按平台中立保留（与 Go 版一致），整个模块豁免 dead_code。
+#![allow(dead_code)]
 
 use std::fmt::Write as _;
 use std::sync::LazyLock;
