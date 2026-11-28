@@ -1,8 +1,8 @@
 ## 本次更新
 
-- 改用 Rust 重写全部代码（Windows 界面不再依赖 walk，改为直接调用 Win32 API；macOS 的菜单栏与事件监听沿用原有 Objective-C / C 实现）
-- 体积更小：Windows 标准版 3.0MB → 1.9MB，精简版 1.66MB → 0.5MB
-- 配置、日志与开机自启的存储位置和格式不变，1.x 老用户升级后无需重新设置
+- 全新品牌图标：绿色键盘板造型，更契合「键盘工具」的定位，深浅色任务栏下都醒目
+- 暂停状态更直观：暂停时托盘图标由绿色切换为珊瑚色（此前为灰度图），Windows 与 macOS 表现一致
+- 功能、配置、日志与开机自启均无变化，直接替换升级即可
 
 ## 下载
 
@@ -22,4 +22,4 @@ Go 实现保留在 [`go`](https://github.com/singcl/keyboard/tree/go) 分支，�
 
 详细说明与各平台功能差异见 [README](https://github.com/singcl/keyboard#readme)。
 
-**完整改动**：https://github.com/singcl/keyboard/commits/v2.0.0
+**完整改动**：https://github.com/singcl/keyboard/commits/v2.1.0
