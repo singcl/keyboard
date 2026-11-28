@@ -205,7 +205,9 @@ pub fn set_status_text(root: HMENU, text: &str) {
         let _ = ModifyMenuW(
             root,
             ids::STATUS as u32,
-            MENU_ITEM_FLAGS(MF_BYCOMMAND.0 | MF_STRING.0),
+            // 状态行只是展示：ModifyMenuW 会整体替换条目标志，
+            // 必须把置灰标志一并带上，否则刷新一次文字后就恢复成可点击的黑色样式
+            MENU_ITEM_FLAGS(MF_BYCOMMAND.0 | MF_STRING.0 | MF_GRAYED.0 | MF_DISABLED.0),
             ids::STATUS as usize,
             super::util::pcw(&t),
         );
