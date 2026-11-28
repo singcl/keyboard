@@ -9,8 +9,8 @@ use std::os::windows::ffi::OsStrExt;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{ERROR_SUCCESS, WIN32_ERROR};
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegGetValueW, RegSetValueW, HKEY,
-    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_SZ,
+    RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ,
+    RRF_RT_REG_SZ,
 };
 
 const RUN_KEY_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -36,64 +36,43 @@ pub fn enabled() -> bool {
 /// 开启或关闭开机自启。
 pub fn set(enabled: bool) -> io::Result<()> {
     let subkey = wide(RUN_KEY_PATH);
-    let mut hkey = HKEY::default();
+    let name = wide(VALUE_NAME);
 
-    // SAFETY: 输出句柄与宽字符串均在调用期间有效。
-    let r = unsafe {
-        RegCreateKeyExW(
-            HKEY_CURRENT_USER,
-            PCWSTR(subkey.as_ptr()),
-            None,
-            PCWSTR::null(),
-            REG_OPTION_NON_VOLATILE,
-            KEY_SET_VALUE,
-            None,
-            &mut hkey,
-            None,
-        )
-    };
-    if r != ERROR_SUCCESS {
-        return Err(reg_error(r));
-    }
-
-    let result = if !enabled {
-        let name = wide(VALUE_NAME);
-        // SAFETY: 宽字符串在调用期间有效；Go 版把「值不存在」也视为成功。
-        let r = unsafe { RegDeleteValueW(hkey, PCWSTR(name.as_ptr())) };
-        match r {
-            ERROR_SUCCESS => Ok(()),
-            e if e == ERROR_FILE_NOT_FOUND_OR_VALUE => Ok(()),
-            e => Err(reg_error(e)),
+    let r = if !enabled {
+        // SAFETY: 宽字符串在调用期间有效；值不存在也视为成功（与 Go 版一致）。
+        unsafe {
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, PCWSTR(subkey.as_ptr()), PCWSTR(name.as_ptr()))
         }
     } else {
         match quoted_exe_path() {
             Ok(exe) => {
-                let name = wide(VALUE_NAME);
                 let data = wide(&exe);
-                let bytes = (data.len() * 2) as u32;
-                // SAFETY: 数据缓冲区按字节数传入（wide() 已含结尾 null）。
-                let r = unsafe {
-                    RegSetValueW(hkey, PCWSTR(name.as_ptr()), REG_SZ, PCWSTR(data.as_ptr()), bytes)
-                };
-                if r == ERROR_SUCCESS {
-                    Ok(())
-                } else {
-                    Err(reg_error(r))
+                let bytes = (data.len() * 2) as u32; // wide() 已含结尾 null
+                // SAFETY: 数据缓冲区按字节数传入，在调用期间有效。
+                unsafe {
+                    RegSetKeyValueW(
+                        HKEY_CURRENT_USER,
+                        PCWSTR(subkey.as_ptr()),
+                        PCWSTR(name.as_ptr()),
+                        REG_SZ.0,
+                        Some(data.as_ptr().cast()),
+                        bytes,
+                    )
                 }
             }
-            Err(e) => Err(e),
+            Err(e) => return Err(e),
         }
     };
 
-    // SAFETY: 句柄由 RegCreateKeyExW 返回。
-    unsafe {
-        let _ = RegCloseKey(hkey);
+    match r {
+        ERROR_SUCCESS => Ok(()),
+        e if e == ERROR_FILE_NOT_FOUND_OR_VALUE && !enabled => Ok(()),
+        e => Err(reg_error(e)),
     }
-    result
 }
 
-// 注册表「值不存在」的 Win32 错误码（ERROR_FILE_NOT_FOUND = 2），
-// RegDeleteValueW 删除不存在的值时返回它，Go 版的 registry.ErrNotExist 对应这里。
+// 注册表「键或值不存在」的 Win32 错误码（ERROR_FILE_NOT_FOUND = 2），
+// Go 版的 registry.ErrNotExist 对应这里。
 const ERROR_FILE_NOT_FOUND_OR_VALUE: WIN32_ERROR = WIN32_ERROR(2);
 
 // 读出 Run 键里记录的命令行；键或值不存在时返回 None。
@@ -150,4 +129,44 @@ fn reg_error(e: WIN32_ERROR) -> io::Error {
 
 fn wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 往返验证：set(true) 后 enabled 必须为 true；结束时恢复用户原有的注册表值。
+    #[test]
+    fn set_enabled_roundtrip_restores_previous() {
+        let previous = exe_value();
+
+        set(true).expect("set(true) 应成功");
+        let exe = quoted_exe_path().unwrap();
+        let stored = exe_value();
+        assert_eq!(stored.as_deref(), Some(exe.as_str()), "读回应与写入一致");
+        assert!(enabled(), "写入当前 exe 路径后 enabled() 应为 true");
+
+        set(false).expect("set(false) 应成功");
+        assert!(!enabled(), "删除值后 enabled() 应为 false");
+
+        // 恢复用户原有的注册表值（可能是旧版 Go 程序的路径）
+        if let Some(old) = previous {
+            let subkey = wide(RUN_KEY_PATH);
+            let name = wide(VALUE_NAME);
+            let data = wide(&old);
+            let bytes = (data.len() * 2) as u32;
+            // SAFETY: 与 set(true) 相同的写法。
+            let r = unsafe {
+                RegSetKeyValueW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(subkey.as_ptr()),
+                    PCWSTR(name.as_ptr()),
+                    REG_SZ.0,
+                    Some(data.as_ptr().cast()),
+                    bytes,
+                )
+            };
+            assert_eq!(r, ERROR_SUCCESS, "恢复原有注册表值失败");
+        }
+    }
 }

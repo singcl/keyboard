@@ -240,10 +240,11 @@ fn gray_png(src: &[u8]) -> Vec<u8> {
         return src.to_vec();
     };
 
-    // 灰度换算与 Go 版 image.Gray 一致
+    // 灰度换算与 Go 版 image.Gray 同一加权（0.299R + 0.587G + 0.114B）。
+    // Go 公式的 >>24 针对 16 位色值输入；这里输入是 8 位，除数相应为 >>16。
     for px in buf.chunks_exact_mut(4) {
         let (r, g, b) = (px[0] as u32, px[1] as u32, px[2] as u32);
-        let l = ((19595 * r + 38470 * g + 7471 * b + (1 << 15)) >> 24) as u8;
+        let l = ((19595 * r + 38470 * g + 7471 * b + (1 << 15)) >> 16) as u8;
         px[0] = l;
         px[1] = l;
         px[2] = l;
