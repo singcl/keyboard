@@ -7,8 +7,8 @@ unsafe extern "C" {
     fn uiInit(
         normal_png: *const u8,
         normal_len: i32,
-        gray_png: *const u8,
-        gray_len: i32,
+        paused_png: *const u8,
+        paused_len: i32,
         version: *const i8,
         update_enabled: i32,
     );
@@ -19,15 +19,15 @@ unsafe extern "C" {
     fn uiPermissionAlert();
 }
 
-pub(crate) fn init(normal: &[u8], gray: &[u8], version: &str, update_enabled: bool) {
+pub(crate) fn init(normal: &[u8], paused: &[u8], version: &str, update_enabled: bool) {
     let v = cstr(version);
     // SAFETY: 字符串与字节缓冲区均在调用期间有效；uiInit 内部拷贝图片数据。
     unsafe {
         uiInit(
             normal.as_ptr(),
             normal.len() as i32,
-            gray.as_ptr(),
-            gray.len() as i32,
+            paused.as_ptr(),
+            paused.len() as i32,
             v.as_ptr() as *const i8,
             i32::from(update_enabled),
         );

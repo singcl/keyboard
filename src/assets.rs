@@ -3,6 +3,9 @@
 /// 托盘图标使用的 PNG 母版（256x256）。
 pub const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 
+/// 暂停态托盘图标的 PNG 母版（256x256，珊瑚色变体）。
+pub const ICON_PAUSED_PNG: &[u8] = include_bytes!("../assets/icon-paused.png");
+
 // PNG 解码到 RGBA8：两个平台的托盘图标共用。
 //
 // 注意 png crate 自 0.17 起默认变换为 IDENTITY，调色板图会原样输出索引字节；

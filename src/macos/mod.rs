@@ -49,10 +49,9 @@ pub fn main_macos() {
     *CFG.lock().unwrap() = Some(cfg0.clone());
     USER_PAUSED.store(bool_to_i32(cfg0.paused), Ordering::Relaxed);
 
-    let gray = gray_png(assets::ICON_PNG);
     ui::init(
         assets::ICON_PNG,
-        &gray,
+        assets::ICON_PAUSED_PNG,
         &format!("版本 {APP_VERSION}"),
         update::enabled(),
     );
@@ -231,36 +230,4 @@ fn check_update(interactive: bool) {
 
 fn bool_to_i32(v: bool) -> i32 {
     i32::from(v)
-}
-
-// 把彩色图标转成灰度 PNG，作为暂停状态的图标。
-fn gray_png(src: &[u8]) -> Vec<u8> {
-    // 解码到 RGBA8 的细节（调色板/tRNS 展开）见 assets::decode_rgba8
-    let Ok((w, h, mut buf)) = crate::assets::decode_rgba8(src) else {
-        return src.to_vec();
-    };
-
-    // 灰度换算与 Go 版 image.Gray 同一加权（0.299R + 0.587G + 0.114B）。
-    // Go 公式的 >>24 针对 16 位色值输入；这里输入是 8 位，除数相应为 >>16。
-    for px in buf.chunks_exact_mut(4) {
-        let (r, g, b) = (px[0] as u32, px[1] as u32, px[2] as u32);
-        let l = ((19595 * r + 38470 * g + 7471 * b + (1 << 15)) >> 16) as u8;
-        px[0] = l;
-        px[1] = l;
-        px[2] = l;
-    }
-
-    let mut out = Vec::new();
-    {
-        let mut encoder = png::Encoder::new(&mut out, w, h);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let Ok(mut writer) = encoder.write_header() else {
-            return src.to_vec();
-        };
-        if writer.write_image_data(&buf).is_err() {
-            return src.to_vec();
-        }
-    }
-    out
 }

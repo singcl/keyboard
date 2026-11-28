@@ -38,6 +38,8 @@ fn build_windows(version: &str) {
     let rc_path = out_dir.join("keyboard-plus.rc");
     fs::write(&rc_path, windows_rc(version)).unwrap();
     println!("cargo:rerun-if-changed=build.rs");
+    // RC 里 1 ICON "assets/icon.ico" 的依赖：ico 变了要重跑 build.rs 重编资源
+    println!("cargo:rerun-if-changed=assets/icon.ico");
 
     embed_resource::compile(&rc_path, embed_resource::NONE)
         .manifest_optional()

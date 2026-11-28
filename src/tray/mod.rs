@@ -94,7 +94,7 @@ pub fn run() -> Result<(), String> {
     let hwnd = create_main_window()?;
     MAIN_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
 
-    let icons = icon::load(assets::ICON_PNG)?;
+    let icons = icon::load(assets::ICON_PNG, assets::ICON_PAUSED_PNG)?;
 
     // 托盘图标（NOTIFYICONDATAW 含裸指针，只存放在 UI 线程的 thread_local 里）
     let mut nid: NOTIFYICONDATAW = unsafe { std::mem::zeroed() };
