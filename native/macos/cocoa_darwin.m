@@ -261,25 +261,26 @@ void uiAboutAlert(const char *title, const char *message,
         [alert setMessageText:[NSString stringWithUTF8String:title]];
         [alert setInformativeText:[NSString stringWithUTF8String:message]];
 
+        // 添加按钮时记录响应序号（NSAlertFirstButtonReturn + 按钮下标），避免按标题反查
+        NSInteger projectIdx = -1, siteIdx = -1;
         if (projectURL != NULL) {
             [alert addButtonWithTitle:@"打开项目主页"];
+            projectIdx = (NSInteger)[alert.buttons count] - 1;
         }
         if (siteURL != NULL) {
             [alert addButtonWithTitle:@"打开个人网站"];
+            siteIdx = (NSInteger)[alert.buttons count] - 1;
         }
         [alert addButtonWithTitle:@"好"];
         [NSApp activateIgnoringOtherApps:YES];
 
         NSModalResponse resp = [alert runModal];
-        // 按标题定位按钮，避免某个 URL 缺失时响应序号漂移
         NSString *url = nil;
-        NSUInteger projectIdx = [alert.buttons indexOfObjectWithTitle:@"打开项目主页"];
-        NSUInteger siteIdx = [alert.buttons indexOfObjectWithTitle:@"打开个人网站"];
-        if (projectURL != NULL && projectIdx != NSNotFound
-            && resp == NSAlertFirstButtonReturn + (NSModalResponse)projectIdx) {
+        if (projectURL != NULL && projectIdx >= 0
+            && resp == NSAlertFirstButtonReturn + projectIdx) {
             url = [NSString stringWithUTF8String:projectURL];
-        } else if (siteURL != NULL && siteIdx != NSNotFound
-            && resp == NSAlertFirstButtonReturn + (NSModalResponse)siteIdx) {
+        } else if (siteURL != NULL && siteIdx >= 0
+            && resp == NSAlertFirstButtonReturn + siteIdx) {
             url = [NSString stringWithUTF8String:siteURL];
         }
         if (url != nil) {
