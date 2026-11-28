@@ -210,7 +210,7 @@ pub extern "C" fn goAbout() {
 键盘防抖工具 · MIT License
 作者：{}
 
-GitHub：github.com/singcl
+GitHub：https://github.com/singcl
 个人主页：https://imcoco.top",
             crate::AUTHOR
         ),

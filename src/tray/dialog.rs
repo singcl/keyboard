@@ -54,7 +54,7 @@ pub fn show_about(owner: HWND) {
 键盘防抖工具 · MIT License{PAD}
 作者：{1}{PAD}
 
-GitHub：github.com/singcl{PAD}
+GitHub：https://github.com/singcl{PAD}
 个人主页：https://imcoco.top{PAD}
 
 是否打开项目主页？{PAD}",
