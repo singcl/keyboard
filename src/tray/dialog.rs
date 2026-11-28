@@ -5,28 +5,28 @@
 use std::cell::Cell;
 
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    GetStockObject, GetSysColorBrush, COLOR_WINDOW, DEFAULT_GUI_FONT, HBRUSH, HGDIOBJ,
+    CreateFontIndirectW, GetMonitorInfoW, GetObjectW, GetStockObject, GetSysColorBrush,
+    MonitorFromPoint, SetBkMode, SetTextColor, COLOR_WINDOW, DEFAULT_GUI_FONT, FW_BOLD,
+    HBRUSH, HDC, HGDIOBJ, LOGFONTW, MONITOR_DEFAULTTONEAREST, MONITORINFO, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Controls::{
-    TaskDialogIndirect, EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET, TASKDIALOGCONFIG,
-    TASKDIALOGCONFIG_0, TASKDIALOG_BUTTON, TASKDIALOG_FLAGS, TD_INFORMATION_ICON,
-    TDF_ALLOW_DIALOG_CANCELLATION, TDF_POSITION_RELATIVE_TO_WINDOW, TDF_USE_COMMAND_LINKS,
-};
+use windows::Win32::UI::Controls::{EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, SetFocus, VK_ESCAPE, VK_RETURN, VK_TAB,
 };
+use windows::Win32::System::SystemServices::SS_NOTIFY;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetDlgItem,
-    GetParent, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, LoadCursorW,
-    MessageBoxW, PostMessageW, RegisterClassExW, SendMessageW, SetForegroundWindow,
-    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, DispatchMessageW, GetMessageW,
-    ES_AUTOHSCROLL, ES_NUMBER, GWLP_WNDPROC, MB_ICONWARNING, MB_OK, MSG, SET_WINDOW_POS_FLAGS,
-    SWP_NOZORDER, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_KEYDOWN,
-    WM_SETFONT, WNDCLASS_STYLES, WNDCLASSEXW, WS_BORDER, WS_CAPTION, WS_CHILDWINDOW,
-    WS_EX_CLIENTEDGE, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
+    CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetCursorPos, GetDlgItem,
+    GetDlgCtrlID, GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW,
+    GetWindowTextW, LoadCursorW, MessageBoxW, PostMessageW, RegisterClassExW, SendMessageW,
+    SetCursor, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
+    DispatchMessageW, GetMessageW, ES_AUTOHSCROLL, ES_NUMBER, GWLP_WNDPROC, GWL_STYLE,
+    IDC_ARROW, IDC_HAND, MB_ICONWARNING, MB_OK, MSG, SET_WINDOW_POS_FLAGS, SWP_NOZORDER,
+    SWP_NOSIZE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_KEYDOWN,
+    WM_CTLCOLORSTATIC, WM_SETCURSOR, WM_SETFONT, WNDCLASS_STYLES, WNDCLASSEXW, WS_BORDER,
+    WS_CAPTION, WS_CHILDWINDOW, WS_EX_CLIENTEDGE, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
 };
 
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -37,10 +37,13 @@ use super::util;
 
 const WM_APP_DONE: u32 = 0x8010; // WM_APP + 16
 
-// 「关于」对话框的按钮 id
-const ID_OPEN_PROJECT: i32 = 1001;
-const ID_OPEN_SITE: i32 = 1002;
-const ID_ABOUT_CLOSE: i32 = 1003;
+// 「关于」对话框的控件 id
+const ID_ABOUT_NAME: i32 = 200;
+const ID_ABOUT_SUB: i32 = 201;
+const ID_ABOUT_AUTHOR: i32 = 202;
+const ID_ABOUT_GITHUB: i32 = 203;
+const ID_ABOUT_SITE: i32 = 204;
+const ID_ABOUT_CLOSE: i32 = 3;
 
 const ID_LABEL: i32 = 100;
 const ID_EDIT: i32 = 101;
@@ -54,63 +57,323 @@ thread_local! {
     // EDIT 原窗口过程，用于子类化捕获 Enter/Esc/Tab
     static EDIT_PROC: Cell<isize> = const { Cell::new(0) };
     static DLG_HWND: Cell<isize> = const { Cell::new(0) };
+// 「关于」对话框：完成标记与链接 STATIC 的原窗口过程（两个链接同属 STATIC 类，原过程一致）
+static ABOUT_DONE: Cell<bool> = const { Cell::new(false) };
+static LINK_PROC: Cell<isize> = const { Cell::new(0) };
+// 「关于」对话框创建的字体（粗体标题 / 下划线链接），关闭时统一删除
+static ABOUT_FONTS: Cell<(isize, isize)> = const { Cell::new((0, 0)) };
 }
 
-/// 「关于」对话框：版本、作者与项目/个人主页；命令链接按钮直接打开对应页面。
+/// 「关于」对话框：版本、作者与项目/个人主页。
+///
+/// 与「自定义防抖阈值」同一套自绘窗口体系（同字体、同配色、同 DPI 缩放），
+/// GitHub / 个人网站做成蓝色下划线可点击链接，窗口在鼠标所在屏幕的工作区居中。
 pub fn show_about(owner: HWND) {
-    // 宽字符串先备好再进调用；TaskDialogIndirect 内部跑模态消息循环，
-    // 不得跨越任何 with_app / RefCell 借用（见 mod.rs 的不变量）。
-    let title = util::wide("关于 keyboard-plus");
-    let instruction = util::wide(&format!("keyboard-plus v{}", crate::APP_VERSION));
-    let content = util::wide(&format!(
-        "键盘防抖工具 · MIT License
+    ABOUT_DONE.set(false);
 
-作者：{}
-GitHub：github.com/singcl
-个人网站：imcoco.top",
-        crate::AUTHOR
-    ));
-    let btn_project = util::wide("打开项目主页");
-    let btn_site = util::wide("打开个人网站");
-    let btn_close = util::wide("关闭");
-
-    let buttons = [
-        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_PROJECT, pszButtonText: PCWSTR(btn_project.as_ptr()) },
-        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_SITE, pszButtonText: PCWSTR(btn_site.as_ptr()) },
-        TASKDIALOG_BUTTON { nButtonID: ID_ABOUT_CLOSE, pszButtonText: PCWSTR(btn_close.as_ptr()) },
-    ];
-    let config = TASKDIALOGCONFIG {
-        cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
-        hwndParent: owner,
-        dwFlags: TASKDIALOG_FLAGS(
-            TDF_USE_COMMAND_LINKS.0 | TDF_ALLOW_DIALOG_CANCELLATION.0 | TDF_POSITION_RELATIVE_TO_WINDOW.0,
-        ),
-        pszWindowTitle: PCWSTR(title.as_ptr()),
-        Anonymous1: TASKDIALOGCONFIG_0 { pszMainIcon: TD_INFORMATION_ICON },
-        pszMainInstruction: PCWSTR(instruction.as_ptr()),
-        pszContent: PCWSTR(content.as_ptr()),
-        cButtons: buttons.len() as u32,
-        pButtons: buttons.as_ptr(),
-        nDefaultButton: ID_ABOUT_CLOSE,
-        ..Default::default()
+    let hwnd = match create_about_dialog(owner) {
+        Ok(h) => h,
+        Err(_) => return,
     };
 
-    let mut button = 0i32;
-    // SAFETY: config 与按钮数组均在调用期间有效；输出指针为局部变量。
-    let r = unsafe { TaskDialogIndirect(&config, Some(&mut button), None, None) };
-    if r.is_err() {
-        // TaskDialog 极少失败（如无 comctl v6 上下文），退回普通消息框兜底
-        util::msg_box_info(
-            Some(owner),
-            &String::from_utf16_lossy(&title),
-            &String::from_utf16_lossy(&content),
-        );
-        return;
+    // 模态：禁用 owner，跑嵌套消息循环（与 show_threshold 相同的模式）
+    // SAFETY: EnableWindow 与后续窗口操作均为常规调用。
+    unsafe {
+        let _ = EnableWindow(owner, false);
+        let _ = ShowWindow(hwnd, SW_SHOW);
+        let mut m = MSG::default();
+        while !ABOUT_DONE.get() {
+            if GetMessageW(&mut m, None, 0, 0).0 <= 0 {
+                break;
+            }
+            DispatchMessageW(&m);
+        }
+        let _ = DestroyWindow(hwnd);
+        let _ = EnableWindow(owner, true);
+        let _ = SetForegroundWindow(owner);
+        // 删除本次创建的派生字体
+        let (bold, under) = ABOUT_FONTS.get();
+        for h in [bold, under] {
+            if h != 0 {
+                let _ = windows::Win32::Graphics::Gdi::DeleteObject(HGDIOBJ(h as *mut _));
+            }
+        }
+        ABOUT_FONTS.set((0, 0));
     }
-    match button {
-        ID_OPEN_PROJECT => open_url(Some(owner), crate::PROJECT_URL),
-        ID_OPEN_SITE => open_url(Some(owner), crate::AUTHOR_SITE_URL),
+}
+
+fn create_about_dialog(owner: HWND) -> Result<HWND, String> {
+    // SAFETY: 窗口类、控件创建与布局均为常规调用。
+    unsafe {
+        let hinstance = GetModuleHandleW(None).map_err(|e| e.to_string())?;
+
+        let class_name = util::wide("kb-plus-about-dlg");
+        let wc = WNDCLASSEXW {
+            cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+            style: WNDCLASS_STYLES(0),
+            lpfnWndProc: Some(about_proc),
+            hInstance: hinstance.into(),
+            hCursor: LoadCursorW(None, IDC_ARROW).map_err(|e| e.to_string())?,
+            hbrBackground: HBRUSH(GetSysColorBrush(COLOR_WINDOW).0),
+            lpszClassName: PCWSTR(class_name.as_ptr()),
+            ..Default::default()
+        };
+        let _ = RegisterClassExW(&wc); // 重复注册忽略
+
+        let title = util::wide("关于 keyboard-plus");
+        let dlg = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            PCWSTR(class_name.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            WINDOW_STYLE((WS_CAPTION.0 | WS_SYSMENU.0) as u32),
+            0,
+            0,
+            380,
+            205,
+            Some(owner),
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+        .map_err(|e| e.to_string())?;
+
+        DLG_HWND.set(dlg.0 as isize);
+
+        // 字体：正文用与阈值对话框相同的 DEFAULT_GUI_FONT；
+        // 标题与链接从 stock 字体取 LOGFONT 派生（同字面、同字号，只加粗/加下划线）。
+        let font: HGDIOBJ = GetStockObject(DEFAULT_GUI_FONT);
+        let mut lf = LOGFONTW::default();
+        GetObjectW(
+            font,
+            std::mem::size_of::<LOGFONTW>() as i32,
+            Some(&mut lf as *mut _ as *mut _),
+        );
+        let mut bold = lf;
+        bold.lfWeight = FW_BOLD.0 as i32;
+        let mut under = lf;
+        under.lfUnderline = 1;
+        let bold_font = CreateFontIndirectW(&bold);
+        let under_font = CreateFontIndirectW(&under);
+        ABOUT_FONTS.set((bold_font.0 as isize, under_font.0 as isize));
+
+        // 控件（96 DPI 布局，创建后按实际 DPI 缩放）
+        let name_text = util::wide(&format!("keyboard-plus v{}", crate::APP_VERSION));
+        let sub_text = util::wide("键盘防抖工具 · MIT License");
+        let author_text = util::wide(&format!("作者：{}", crate::AUTHOR));
+        let github_text = util::wide("GitHub：github.com/singcl");
+        let site_text = util::wide("个人网站：imcoco.top");
+        let close_text = util::wide("关闭");
+        let static_class = util::wide("STATIC");
+        let button_class = util::wide("BUTTON");
+
+        let mut mk_static =
+            |id: i32, text: &[u16], x: i32, y: i32, w: i32, h: i32| -> Result<HWND, String> {
+                CreateWindowExW(
+                    WINDOW_EX_STYLE(0),
+                    PCWSTR(static_class.as_ptr()),
+                    PCWSTR(text.as_ptr()),
+                    WINDOW_STYLE((WS_CHILDWINDOW.0 | WS_VISIBLE.0) as u32),
+                    x, y, w, h,
+                    Some(dlg), Some(hmenu(id)), Some(hinstance.into()), None,
+                )
+                .map_err(|e| e.to_string())
+            };
+
+        let name = mk_static(ID_ABOUT_NAME, &name_text, 16, 12, 348, 26)?;
+        let sub = mk_static(ID_ABOUT_SUB, &sub_text, 16, 44, 348, 20)?;
+        let author = mk_static(ID_ABOUT_AUTHOR, &author_text, 16, 70, 348, 20)?;
+        let mut github = mk_static(ID_ABOUT_GITHUB, &github_text, 16, 96, 348, 20)?;
+        let mut site = mk_static(ID_ABOUT_SITE, &site_text, 16, 120, 348, 20)?;
+        let _ = SendMessageW(name, WM_SETFONT, Some(WPARAM(bold_font.0 as usize)), Some(LPARAM(1)));
+        let _ = SendMessageW(github, WM_SETFONT, Some(WPARAM(under_font.0 as usize)), Some(LPARAM(1)));
+        let _ = SendMessageW(site, WM_SETFONT, Some(WPARAM(under_font.0 as usize)), Some(LPARAM(1)));
+        for h in [sub, author] {
+            let _ = SendMessageW(h, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+        }
+
+        // 链接：打开 SS_NOTIFY（点击发送 WM_COMMAND），子类化加手型光标
+        for h in [&mut github, &mut site] {
+            let style = GetWindowLongPtrW(*h, GWL_STYLE);
+            let _ = SetWindowLongPtrW(
+                *h,
+                GWL_STYLE,
+                style | SS_NOTIFY.0 as isize,
+            );
+            let prev = GetWindowLongPtrW(*h, GWLP_WNDPROC);
+            LINK_PROC.set(prev);
+            let _ = SetWindowLongPtrW(*h, GWLP_WNDPROC, link_proc as isize);
+        }
+
+        let close = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            PCWSTR(button_class.as_ptr()),
+            PCWSTR(close_text.as_ptr()),
+            WINDOW_STYLE((WS_CHILDWINDOW.0 | WS_VISIBLE.0 | WS_TABSTOP.0) as u32),
+            289, 168, 75, 25,
+            Some(dlg), Some(hmenu(ID_ABOUT_CLOSE)), Some(hinstance.into()), None,
+        )
+        .map_err(|e| e.to_string())?;
+        let _ = SendMessageW(close, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+
+        // DPI 缩放后在鼠标所在屏幕的工作区居中
+        scale_about(dlg);
+        center_about(dlg);
+        Ok(dlg)
+    }
+}
+
+// 「关于」对话框的 96 DPI 布局表（id, x, y, w, h），与阈值对话框的 scale_dialog 同构。
+const ABOUT_LAYOUT: [(i32, i32, i32, i32, i32); 6] = [
+    (ID_ABOUT_NAME, 16, 12, 348, 26),
+    (ID_ABOUT_SUB, 16, 44, 348, 20),
+    (ID_ABOUT_AUTHOR, 16, 70, 348, 20),
+    (ID_ABOUT_GITHUB, 16, 96, 348, 20),
+    (ID_ABOUT_SITE, 16, 120, 348, 20),
+    (ID_ABOUT_CLOSE, 289, 168, 75, 25),
+];
+
+// 把 96 DPI 的布局按窗口实际 DPI 放大。
+fn scale_about(dlg: HWND) {
+    // SAFETY: 句柄有效。
+    unsafe {
+        let dpi = windows::Win32::UI::HiDpi::GetDpiForWindow(dlg).max(96) as i32;
+        if dpi == 96 {
+            return;
+        }
+        let s = |v: i32| v * dpi / 96;
+        let mut rect = RECT::default();
+        let _ = GetWindowRect(dlg, &mut rect);
+        let w = s(rect.right - rect.left);
+        let h = s(rect.bottom - rect.top);
+        let _ = SetWindowPos(
+            dlg, None, 0, 0, w, h,
+            SET_WINDOW_POS_FLAGS(windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE.0 | SWP_NOZORDER.0),
+        );
+        for (id, x, y, cw, ch) in ABOUT_LAYOUT {
+            if let Ok(hctl) = GetDlgItem(Some(dlg), id) {
+                let _ = SetWindowPos(hctl, None, s(x), s(y), s(cw), s(ch), SET_WINDOW_POS_FLAGS(SWP_NOZORDER.0));
+            }
+        }
+    }
+}
+
+// 在鼠标所在显示器的工作区居中（托盘入口没有合理的前台窗口可参照）。
+fn center_about(dlg: HWND) {
+    // SAFETY: 句柄有效。
+    unsafe {
+        let mut p = POINT::default();
+        let _ = GetCursorPos(&mut p);
+        let mon = MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST);
+        let mut mi = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !GetMonitorInfoW(mon, &mut mi).as_bool() {
+            return;
+        }
+        let wa = mi.rcWork;
+        let mut rect = RECT::default();
+        let _ = GetWindowRect(dlg, &mut rect);
+        let w = rect.right - rect.left;
+        let h = rect.bottom - rect.top;
+        let x = wa.left + (wa.right - wa.left - w) / 2;
+        let y = wa.top + (wa.bottom - wa.top - h) / 2;
+        let _ = SetWindowPos(
+            dlg, None, x, y, 0, 0,
+            SET_WINDOW_POS_FLAGS(SWP_NOSIZE.0 | SWP_NOZORDER.0),
+        );
+    }
+}
+
+// SAFETY: UI 线程回调；「关于」窗口过程。
+unsafe extern "system" fn about_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    match msg {
+        WM_COMMAND => match (wparam.0 as i32) & 0xFFFF {
+            ID_ABOUT_CLOSE => finish_about(),
+            ID_ABOUT_GITHUB => open_url(None, crate::PROJECT_URL),
+            ID_ABOUT_SITE => open_url(None, crate::AUTHOR_SITE_URL),
+            _ => {}
+        },
+        // 链接文字：蓝色 + 透明背景；其余静态控件走默认
+        WM_CTLCOLORSTATIC => {
+            let hdc = HDC(wparam.0 as *mut _);
+            let ctrl = HWND(lparam.0 as *mut _);
+            let id = GetDlgCtrlID(ctrl);
+            if id == ID_ABOUT_GITHUB || id == ID_ABOUT_SITE {
+                // SAFETY: hdc 来自系统；句柄有效。
+                unsafe {
+                    SetTextColor(hdc, COLORREF(0x00CC6600)); // RGB(0, 102, 204)，Windows 经典链接蓝
+                }
+                let _ = SetBkMode(hdc, TRANSPARENT);
+                let brush = GetSysColorBrush(COLOR_WINDOW);
+                return LRESULT(brush.0 as isize);
+            }
+        }
+        WM_CLOSE => finish_about(),
+        WM_APP_DONE => ABOUT_DONE.set(true),
         _ => {}
+    }
+    // SAFETY: 其余消息交还默认处理。
+    unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+}
+
+// SAFETY: 链接 STATIC 子类化过程：悬停手型光标，其余转发原过程。
+unsafe extern "system" fn link_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // SAFETY: 系统回调；STATIC 由本模块创建并子类化。
+    unsafe {
+        if msg == WM_SETCURSOR {
+            let hand = LoadCursorW(None, IDC_HAND).unwrap_or_default();
+            SetCursor(Some(hand));
+            return LRESULT(1);
+        }
+        let prev = LINK_PROC.get();
+        CallWindowProcW(
+            Some(std::mem::transmute::<
+                isize,
+                unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT,
+            >(prev)),
+            hwnd, msg, wparam, lparam,
+        )
+    }
+}
+
+#[cfg(test)]
+mod about_tests {
+    use super::*;
+
+    #[test]
+    fn about_dialog_creates_and_lays_out() {
+        // 真机冒烟：创建「关于」对话框并校验全部控件存在（无交互，创建后即销毁）
+        let dlg = create_about_dialog(HWND::default()).expect("关于对话框应能创建");
+        // SAFETY: 查询自建窗口的控件。
+        for id in [
+            ID_ABOUT_NAME,
+            ID_ABOUT_SUB,
+            ID_ABOUT_AUTHOR,
+            ID_ABOUT_GITHUB,
+            ID_ABOUT_SITE,
+            ID_ABOUT_CLOSE,
+        ] {
+            unsafe {
+                assert!(GetDlgItem(Some(dlg), id).is_ok(), "控件 {id} 缺失");
+            }
+        }
+        // SAFETY: 测试内自建窗口，直接销毁。
+        unsafe {
+            let _ = DestroyWindow(dlg);
+        }
+    }
+}
+
+fn finish_about() {
+    ABOUT_DONE.set(true);
+    // 退出模态循环（窗口由外层统一销毁）
+    let h = DLG_HWND.get();
+    if h != 0 {
+        // SAFETY: 消息仅在对话框窗口上投递。
+        unsafe {
+            let _ = PostMessageW(Some(HWND(h as *mut _)), WM_APP_DONE, WPARAM(0), LPARAM(0));
+        }
     }
 }
 
