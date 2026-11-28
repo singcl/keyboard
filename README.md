@@ -80,6 +80,26 @@ CGO_ENABLED=0 go build -ldflags "-w -s -H windowsgui" -o keyboard-plus.exe ./cmd
 
 加 `-tags noupdate` 可编译精简版（去掉「检查更新」，不链接 `net/http`，体积约为一半）。
 
+## Git 代理
+
+项目内提供了配置和取消 Git 代理的脚本，只影响当前仓库，不会修改全局配置。
+
+Windows：
+
+```
+git-proxy.bat set                       # 使用默认代理 http://127.0.0.1:10808
+git-proxy.bat set http://127.0.0.1:7890 # 指定代理
+git-proxy.bat unset                     # 取消代理
+```
+
+Shell（Git Bash / macOS / Linux）：
+
+```
+./git-proxy.sh set
+./git-proxy.sh set http://127.0.0.1:7890
+./git-proxy.sh unset
+```
+
 如果修改了 `internal/assets/icon.ico`、`internal/assets/keyboard.manifest` 或 `winres/winres.json`（版本号、文件描述等），需要重新生成资源后再编译：
 
 ```
