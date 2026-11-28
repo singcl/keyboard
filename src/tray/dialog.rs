@@ -53,7 +53,7 @@ pub fn show_about(owner: HWND) {
 作者：{}
 
 GitHub：github.com/singcl
-个人网站：imcoco.top
+个人主页：imcoco.top
 
 是否打开项目主页？",
         crate::APP_VERSION,

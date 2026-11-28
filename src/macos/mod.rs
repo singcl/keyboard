@@ -211,7 +211,7 @@ pub extern "C" fn goAbout() {
 
 作者：{}
 GitHub：github.com/singcl
-个人网站：imcoco.top",
+个人主页：imcoco.top",
             crate::AUTHOR
         ),
         crate::PROJECT_URL,
