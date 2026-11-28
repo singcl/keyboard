@@ -21,6 +21,10 @@ void goRevealConfig(void);
 void goQuit(void);
 void goCheckUpdate(void);
 
+// 托盘图标样式：0 键盘板（默认）、1 脉冲屏（标准版 uiInit 传入备用图后才可用）
+void goSetIconStyle(int style);
+int goIconStyle(void);
+
 // CGEventTap 回调：返回 1 表示拦截这次按键
 int goHandleKeyCode(uint32_t keyCode, int down, int autoRepeat);
 

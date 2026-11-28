@@ -6,6 +6,12 @@ pub const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 /// 暂停态托盘图标的 PNG 母版（256x256，珊瑚色变体）。
 pub const ICON_PAUSED_PNG: &[u8] = include_bytes!("../assets/icon-paused.png");
 
+/// 第二套图标样式「脉冲屏」（标准版 icon-switch feature 才内嵌，精简版为零成本）。
+#[cfg(feature = "icon-switch")]
+pub const ICON_ALT_PNG: &[u8] = include_bytes!("../assets/icon-alt.png");
+#[cfg(feature = "icon-switch")]
+pub const ICON_ALT_PAUSED_PNG: &[u8] = include_bytes!("../assets/icon-alt-paused.png");
+
 // PNG 解码到 RGBA8：两个平台的托盘图标共用。
 //
 // 注意 png crate 自 0.17 起默认变换为 IDENTITY，调色板图会原样输出索引字节；

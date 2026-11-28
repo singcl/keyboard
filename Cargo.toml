@@ -8,10 +8,12 @@ repository = "https://github.com/singcl/keyboard"
 publish = false
 build = "build.rs"
 
-# 标准版含「检查更新」；精简版用 --no-default-features 编译，不链接 HTTP/TLS，也不访问网络。
+# 标准版含「检查更新」与「托盘图标样式切换」；精简版用 --no-default-features 编译，
+# 不链接 HTTP/TLS、不访问网络，也不内嵌第二套图标。
 [features]
-default = ["update"]
+default = ["update", "icon-switch"]
 update = ["dep:ureq"]
+icon-switch = []
 
 [dependencies]
 png = { version = "0.18", default-features = false }

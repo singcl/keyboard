@@ -9,6 +9,10 @@ unsafe extern "C" {
         normal_len: i32,
         paused_png: *const u8,
         paused_len: i32,
+        normal_alt_png: *const u8,
+        normal_alt_len: i32,
+        paused_alt_png: *const u8,
+        paused_alt_len: i32,
         version: *const i8,
         update_enabled: i32,
     );
@@ -19,8 +23,18 @@ unsafe extern "C" {
     fn uiPermissionAlert();
 }
 
-pub(crate) fn init(normal: &[u8], paused: &[u8], version: &str, update_enabled: bool) {
+pub(crate) fn init(
+    normal: &[u8],
+    paused: &[u8],
+    normal_alt: Option<&[u8]>,
+    paused_alt: Option<&[u8]>,
+    version: &str,
+    update_enabled: bool,
+) {
     let v = cstr(version);
+    // 备用图为 None（精简版）时传空指针，Objective-C 侧据此不建「图标样式」菜单
+    let (na, na_len) = normal_alt.map_or((std::ptr::null(), 0), |b| (b.as_ptr(), b.len()));
+    let (pa, pa_len) = paused_alt.map_or((std::ptr::null(), 0), |b| (b.as_ptr(), b.len()));
     // SAFETY: 字符串与字节缓冲区均在调用期间有效；uiInit 内部拷贝图片数据。
     unsafe {
         uiInit(
@@ -28,6 +42,10 @@ pub(crate) fn init(normal: &[u8], paused: &[u8], version: &str, update_enabled: 
             normal.len() as i32,
             paused.as_ptr(),
             paused.len() as i32,
+            na,
+            na_len as i32,
+            pa,
+            pa_len as i32,
             v.as_ptr() as *const i8,
             i32::from(update_enabled),
         );

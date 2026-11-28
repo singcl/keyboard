@@ -15,6 +15,10 @@ static NSMenuItem *gPresetItems[4] = {nil, nil, nil, nil};
 static const int kPresets[4] = {100, 80, 67, 50};
 static NSImage *gNormalIcon = nil;
 static NSImage *gPausedIcon = nil;
+// 第二套样式「脉冲屏」：精简版（uiInit 传 NULL）不加载，菜单里也不显示切换项
+static NSImage *gNormalAltIcon = nil;
+static NSImage *gPausedAltIcon = nil;
+static NSMenuItem *gStyleItems[2] = {nil, nil};
 // 精简版（-tags noupdate）不构建检查更新，菜单里也不显示
 static int gUpdateEnabled = 0;
 
@@ -76,6 +80,11 @@ static void refreshUI(void);
     goRevealConfig();
 }
 
+- (void)setIconStyle:(id)sender {
+    goSetIconStyle((int)[sender tag]);
+    refreshUI();
+}
+
 - (void)quitApp:(id)sender {
     goQuit();
 }
@@ -98,7 +107,9 @@ static NSImage *imageFromPNG(const void *data, int length) {
     return image;
 }
 
-void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayLen, const char *version, int updateEnabled) {
+void uiInit(const void *normalPNG, int normalLen, const void *pausedPNG, int pausedLen,
+            const void *normalAltPNG, int normalAltLen, const void *pausedAltPNG, int pausedAltLen,
+            const char *version, int updateEnabled) {
     @autoreleasepool {
         gUpdateEnabled = updateEnabled;
         [NSApplication sharedApplication];
@@ -106,7 +117,11 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
         gNormalIcon = imageFromPNG(normalPNG, normalLen);
-        gPausedIcon = imageFromPNG(grayPNG, grayLen);
+        gPausedIcon = imageFromPNG(pausedPNG, pausedLen);
+        if (normalAltPNG != NULL && pausedAltPNG != NULL) {
+            gNormalAltIcon = imageFromPNG(normalAltPNG, normalAltLen);
+            gPausedAltIcon = imageFromPNG(pausedAltPNG, pausedAltLen);
+        }
         gMenuTarget = [[KeyboardMenu alloc] init];
 
         gStatusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
@@ -141,6 +156,20 @@ void uiInit(const void *normalPNG, int normalLen, const void *grayPNG, int grayL
 
         gPauseItem = addItem(menu, @"暂停防抖", @selector(togglePause:));
         gAutoItem = addItem(menu, @"开机自启", @selector(toggleAutostart:));
+        if (gNormalAltIcon != nil) {
+            NSMenuItem *styleItem = [[NSMenuItem alloc] initWithTitle:@"图标样式" action:nil keyEquivalent:@""];
+            NSMenu *styleMenu = [[NSMenu alloc] init];
+            [styleMenu setTitle:@"图标样式"];
+            [styleItem setSubmenu:styleMenu];
+            [menu addItem:styleItem];
+            for (int i = 0; i < 2; i++) {
+                NSMenuItem *item = addItem(styleMenu,
+                    i == 0 ? @"键盘板" : @"脉冲屏",
+                    @selector(setIconStyle:));
+                [item setTag:i];
+                gStyleItems[i] = item;
+            }
+        }
         [menu addItem:[NSMenuItem separatorItem]];
 
         addItem(menu, @"打开日志", @selector(openLog:));
@@ -279,7 +308,20 @@ static void refreshUI(void) {
     [gPauseItem setState:paused != 0 ? NSControlStateValueOn : NSControlStateValueOff];
     [gAutoItem setState:goAutostartEnabled() != 0 ? NSControlStateValueOn : NSControlStateValueOff];
 
-    NSImage *icon = (paused != 0) ? gPausedIcon : gNormalIcon;
+    // 图标样式：标准版才有多套，样式号非 0 但缺备用图（精简版）时退回键盘板
+    int style = goIconStyle();
+    if (style != 0 && (gNormalAltIcon == nil || gPausedAltIcon == nil)) {
+        style = 0;
+    }
+    NSImage *normal = (style == 1) ? gNormalAltIcon : gNormalIcon;
+    NSImage *pausedImg = (style == 1) ? gPausedAltIcon : gPausedIcon;
+    for (int i = 0; i < 2; i++) {
+        if (gStyleItems[i] != nil) {
+            [gStyleItems[i] setState:(style == i) ? NSControlStateValueOn : NSControlStateValueOff];
+        }
+    }
+
+    NSImage *icon = (paused != 0) ? pausedImg : normal;
     if (icon != nil) {
         [[gStatusItem button] setImage:icon];
     }

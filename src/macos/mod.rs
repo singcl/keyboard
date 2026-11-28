@@ -49,9 +49,18 @@ pub fn main_macos() {
     *CFG.lock().unwrap() = Some(cfg0.clone());
     USER_PAUSED.store(bool_to_i32(cfg0.paused), Ordering::Relaxed);
 
+    // 第二套图标样式（脉冲屏）：仅标准版内嵌，精简版传 None（菜单不显示切换项）
+    #[cfg(feature = "icon-switch")]
+    let (normal_alt, paused_alt): (Option<&[u8]>, Option<&[u8]>) =
+        (Some(assets::ICON_ALT_PNG), Some(assets::ICON_ALT_PAUSED_PNG));
+    #[cfg(not(feature = "icon-switch"))]
+    let (normal_alt, paused_alt): (Option<&[u8]>, Option<&[u8]>) = (None, None);
+
     ui::init(
         assets::ICON_PNG,
         assets::ICON_PAUSED_PNG,
+        normal_alt,
+        paused_alt,
         &format!("版本 {APP_VERSION}"),
         update::enabled(),
     );
@@ -190,6 +199,16 @@ pub extern "C" fn goRevealConfig() {
 pub extern "C" fn goQuit() {
     hook::stop();
     std::process::exit(0);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn goIconStyle() -> i32 {
+    CFG.lock().unwrap().as_ref().map_or(0, |c| c.icon_style as i32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn goSetIconStyle(style: i32) {
+    set_cfg(|c| c.icon_style = if style == 1 { 1 } else { 0 });
 }
 
 #[unsafe(no_mangle)]

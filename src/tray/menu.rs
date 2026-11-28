@@ -25,9 +25,13 @@ pub mod ids {
     pub const CHECK_UPDATE: u16 = 123;
     pub const VERSION: u16 = 124;
     pub const EXIT: u16 = 125;
+    pub const ICON_STYLE_BASE: u16 = 130; // 130=键盘板 131=脉冲屏（标准版才有此子菜单）
 }
 
 pub const PRESETS: [i32; 4] = [100, 80, 67, 50];
+
+/// 图标样式名称（下标即 icon_style 值；精简版只有第 0 套）。
+pub const ICON_STYLES: [&str; 2] = ["键盘板", "脉冲屏"];
 
 pub const FLAG_STRING: MENU_ITEM_FLAGS = MF_STRING;
 pub const FLAG_DISABLED: MENU_ITEM_FLAGS = MENU_ITEM_FLAGS(MF_STRING.0 | MF_GRAYED.0 | MF_DISABLED.0);
@@ -136,7 +140,8 @@ fn add_target_item(
 }
 
 /// 刷新与配置相关的勾选状态和文字（Go 版 syncMenu）。
-pub fn sync_config_menus(root: HMENU, debounce: HMENU, hwnd: HWND, cfg: &Config) {
+/// iconstyle 为「图标样式」子菜单句柄，精简版没有该子菜单时传空句柄。
+pub fn sync_config_menus(root: HMENU, debounce: HMENU, iconstyle: HMENU, hwnd: HWND, cfg: &Config) {
     let _ = hwnd;
     // SAFETY: 菜单与窗口句柄均有效。
     unsafe {
@@ -194,6 +199,21 @@ pub fn sync_config_menus(root: HMENU, debounce: HMENU, hwnd: HWND, cfg: &Config)
             ids::GATE as u32,
             MF_BYCOMMAND.0 | if cfg.only_when_connected { MF_CHECKED.0 } else { MF_UNCHECKED.0 },
         );
+
+        // 图标样式勾选（子菜单仅标准版存在）
+        if !iconstyle.0.is_null() {
+            for (i, _) in ICON_STYLES.iter().enumerate() {
+                let _ = CheckMenuItem(
+                    iconstyle,
+                    (ids::ICON_STYLE_BASE + i as u16) as u32,
+                    MF_BYCOMMAND.0 | if cfg.icon_style as usize == i {
+                        MF_CHECKED.0
+                    } else {
+                        MF_UNCHECKED.0
+                    },
+                );
+            }
+        }
     }
 }
 

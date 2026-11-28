@@ -103,7 +103,7 @@ pub fn run() -> Result<(), String> {
     nid.uID = 1;
     nid.uFlags = NOTIFY_ICON_DATA_FLAGS(NIF_MESSAGE.0 | NIF_ICON.0 | NIF_TIP.0);
     nid.uCallbackMessage = WM_APP_TRAY;
-    nid.hIcon = icons.normal;
+    nid.hIcon = icons.pick(cfg0.icon_style).0;
     nid.szTip = fixed_bytes::<128>("键盘防抖");
     // SAFETY: nid 字段已完整填写。
     unsafe {
@@ -192,6 +192,8 @@ struct Menus {
     root: windows::Win32::UI::WindowsAndMessaging::HMENU,
     debounce: windows::Win32::UI::WindowsAndMessaging::HMENU,
     target: windows::Win32::UI::WindowsAndMessaging::HMENU,
+    /// 「图标样式」子菜单；精简版无此子菜单，为空句柄
+    iconstyle: windows::Win32::UI::WindowsAndMessaging::HMENU,
     /// 目标键盘条目映射（id -> 设备），右键重建时刷新
     target_items: Vec<menu::TargetItem>,
 }
@@ -323,7 +325,7 @@ fn show_context_menu(hwnd: HWND) {
         rebuild_target_menu();
         with_app(|app| {
             let menus = app.menus.as_ref().expect("菜单已构建");
-            menu::sync_config_menus(menus.root, menus.debounce, hwnd, &c);
+            menu::sync_config_menus(menus.root, menus.debounce, menus.iconstyle, hwnd, &c);
         });
     }
     let Some(root) = with_app_ret(|app| app.menus.as_ref().map(|m| m.root)) else {
@@ -499,6 +501,13 @@ fn handle_command(hwnd: HWND, id: u16) {
         ids::EXIT => unsafe {
             PostQuitMessage(0);
         },
+        // 图标样式切换（标准版）：0 键盘板 / 1 脉冲屏
+        id if (menu::ids::ICON_STYLE_BASE..=menu::ids::ICON_STYLE_BASE + 1).contains(&id) => {
+            let style = (id - menu::ids::ICON_STYLE_BASE) as u8;
+            update_cfg(|c| c.icon_style = style);
+            apply_pause_state();
+            logging::event(&format!("图标样式切换为：{}", menu::ICON_STYLES[style as usize]));
+        }
         _ => {}
     }
 }
@@ -521,7 +530,8 @@ fn apply_pause_state() {
     let icon = {
         let mut icon = None;
         with_app(|app| {
-            icon = Some(if c.paused || effective { app.icons.paused } else { app.icons.normal });
+            let (normal, paused) = app.icons.pick(c.icon_style);
+            icon = Some(if c.paused || effective { paused } else { normal });
         });
         icon
     };
@@ -575,7 +585,7 @@ fn sync_checkboxes() {
     with_app(|app| {
         if let Some(menus) = app.menus.as_ref() {
             let c = cfg();
-            menu::sync_config_menus(menus.root, menus.debounce, app.hwnd, &c);
+            menu::sync_config_menus(menus.root, menus.debounce, menus.iconstyle, app.hwnd, &c);
         }
     });
 }
@@ -676,6 +686,7 @@ fn build_menus() {
     let root = menu::new_popup();
     let debounce = menu::new_popup();
     let target = menu::new_popup();
+    let switchable = with_app_ret(|app| app.icons.switchable()).unwrap_or(false);
 
     menu::item(root, menu::ids::STATUS, "状态：运行中", menu::FLAG_DISABLED);
     menu::separator(root);
@@ -693,6 +704,14 @@ fn build_menus() {
     menu::item(root, menu::ids::DEVICES, "识别键盘设备", menu::FLAG_STRING);
     menu::item(root, menu::ids::GATE, "仅目标键盘在线时防抖", menu::FLAG_STRING);
     menu::popup(root, target, "目标键盘");
+    // 图标样式切换：精简版（单套图标）不建此子菜单
+    let iconstyle = menu::new_popup();
+    if switchable {
+        menu::popup(root, iconstyle, "图标样式");
+        for (i, name) in menu::ICON_STYLES.iter().enumerate() {
+            menu::item(iconstyle, menu::ids::ICON_STYLE_BASE + i as u16, name, menu::FLAG_STRING);
+        }
+    }
     menu::separator(root);
     menu::item(root, menu::ids::LOG, "查看日志", menu::FLAG_STRING);
     menu::item(root, menu::ids::CFG_LOC, "配置文件位置", menu::FLAG_STRING);
@@ -709,6 +728,6 @@ fn build_menus() {
     menu::rebuild_target(target, &mut items, &cfg());
 
     with_app(|app| {
-        app.menus = Some(Menus { root, debounce, target, target_items: items });
+        app.menus = Some(Menus { root, debounce, target, iconstyle, target_items: items });
     });
 }

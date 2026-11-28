@@ -31,6 +31,11 @@ pub struct Config {
     /// 记录用户是否手动暂停了拦截，重启后保持该状态
     #[serde(rename = "paused", default)]
     pub paused: bool,
+
+    /// 托盘图标样式：0 键盘板（默认）、1 脉冲屏；仅标准版提供切换入口，
+    /// 精简版读取后忽略（固定键盘板），字段仍保留以便来回切换共用配置
+    #[serde(rename = "icon_style", default)]
+    pub icon_style: u8,
 }
 
 impl Default for Config {
@@ -41,6 +46,7 @@ impl Default for Config {
             target_path: String::new(),
             only_when_connected: false,
             paused: false,
+            icon_style: 0,
         }
     }
 }
@@ -181,9 +187,13 @@ mod tests {
         assert!(cfg.paused);
 
         let text = serde_json::to_string(&Config::default()).unwrap();
-        for field in ["debounce_ms", "target_name", "target_path", "only_when_connected", "paused"] {
+        for field in ["debounce_ms", "target_name", "target_path", "only_when_connected", "paused", "icon_style"] {
             assert!(text.contains(field), "missing {field} in {text}");
         }
+
+        // 新字段 icon_style：缺省 0，显式给出 1 也能读入（老配置没有该字段）
+        let cfg: Config = serde_json::from_str(r#"{"debounce_ms":80,"icon_style":1}"#).unwrap();
+        assert_eq!(cfg.icon_style, 1);
     }
 
     fn tempfile_for_tests() -> PathBuf {
