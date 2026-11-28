@@ -46,7 +46,7 @@ thread_local! {
 }
 
 /// 「关于作者」对话框：版本、作者与链接；样式与「检查更新」弹窗一致（标准消息框）。
-/// 「是」打开个人主页，「否」打开项目主页，× / 取消仅关闭。
+/// 「是」打开项目主页，「否」打开个人主页，× / 取消仅关闭。
 pub fn show_about(owner: HWND) {
     let msg = format!(
         "keyboard-plus v{}
@@ -56,17 +56,17 @@ pub fn show_about(owner: HWND) {
 GitHub：https://github.com/singcl
 个人主页：https://imcoco.top
 
-「是」打开个人主页，「否」打开项目主页",
+「是」打开项目主页，「否」打开个人主页",
         crate::APP_VERSION,
         crate::AUTHOR
     );
     let choice = util::msg_box(Some(owner), "关于作者", &msg, MB_YESNOCANCEL | MB_ICONQUESTION);
     if choice == MESSAGEBOX_RESULT(6) {
-        // IDYES：个人主页
-        open_url(Some(owner), crate::AUTHOR_SITE_URL);
-    } else if choice == MESSAGEBOX_RESULT(7) {
-        // IDNO：项目主页
+        // IDYES：项目主页
         open_url(Some(owner), crate::PROJECT_URL);
+    } else if choice == MESSAGEBOX_RESULT(7) {
+        // IDNO：个人主页
+        open_url(Some(owner), crate::AUTHOR_SITE_URL);
     }
     // IDCANCEL / ×：仅关闭
 }
