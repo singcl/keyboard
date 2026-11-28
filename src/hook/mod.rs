@@ -109,7 +109,8 @@ pub(crate) fn set_key_down(vk: u32, down: bool) {
     }
 }
 
-#[cfg(test)]
+// 仅 Windows 的回调注入测试使用（macOS 测试不驱动 keyboard_proc）
+#[cfg(all(test, windows))]
 pub(crate) fn reset_for_tests() {
     LAST_VK.store(0, Ordering::Relaxed);
     LAST_DOWN_NANOS.store(0, Ordering::Relaxed);

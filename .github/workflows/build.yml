@@ -83,7 +83,6 @@ jobs:
       - name: Build
         run: |
           cargo build --release
-          cargo build --release --no-default-features
           cp target/release/keyboard-plus.exe keyboard-plus.exe
           cargo build --release --no-default-features
           cp target/release/keyboard-plus.exe keyboard-plus-slim.exe
