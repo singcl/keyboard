@@ -10,7 +10,11 @@ use windows::Win32::Graphics::Gdi::{
     GetStockObject, GetSysColorBrush, COLOR_WINDOW, DEFAULT_GUI_FONT, HBRUSH, HGDIOBJ,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Controls::{EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET};
+use windows::Win32::UI::Controls::{
+    TaskDialogIndirect, EM_LIMITTEXT, EM_SETSEL, EM_SCROLLCARET, TASKDIALOGCONFIG,
+    TASKDIALOGCONFIG_0, TASKDIALOG_BUTTON, TASKDIALOG_FLAGS, TD_INFORMATION_ICON,
+    TDF_ALLOW_DIALOG_CANCELLATION, TDF_USE_COMMAND_LINKS,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     EnableWindow, SetFocus, VK_ESCAPE, VK_RETURN, VK_TAB,
 };
@@ -30,6 +34,10 @@ use super::util;
 
 const WM_APP_DONE: u32 = 0x8010; // WM_APP + 16
 
+// 「关于作者」的两个链接按钮 id；关闭走标题栏 ×（TDF_ALLOW_DIALOG_CANCELLATION）
+const ID_OPEN_PROJECT: i32 = 1001;
+const ID_OPEN_SITE: i32 = 1002;
+
 const ID_LABEL: i32 = 100;
 const ID_EDIT: i32 = 101;
 const ID_OK: i32 = 1;
@@ -44,25 +52,55 @@ thread_local! {
     static DLG_HWND: Cell<isize> = const { Cell::new(0) };
 }
 
-/// 「关于作者」对话框：版本、作者与链接；样式与「检查更新」弹窗一致（标准消息框），
-/// 「是」打开项目主页。
+/// 「关于作者」对话框：版本、作者与两个链接。
+///
+/// 双命令链接「项目主页 / 个人主页」，标题栏 × 或 Esc 关闭（TDF_ALLOW_DIALOG_CANCELLATION）。
+/// 不挂 owner、不加 POSITION 标志：TaskDialog 自动在屏幕居中（托盘入口没有可参照的前台窗口）。
 pub fn show_about(owner: HWND) {
-    // 消息框宽度由最长文本行决定：给各行补尾随空格，让窗口更舒展
-    const PAD: &str = "                        ";
-    let msg = format!(
-        "keyboard-plus v{0}{PAD}
-键盘防抖工具 · MIT License{PAD}
-作者：{1}{PAD}
-
-GitHub：https://github.com/singcl{PAD}
-个人主页：https://imcoco.top{PAD}
-
-是否打开项目主页？{PAD}",
-        crate::APP_VERSION,
+    // 宽字符串先备好再进调用；TaskDialogIndirect 内部跑模态消息循环，
+    // 不得跨越任何 with_app / RefCell 借用（见 mod.rs 的不变量）。
+    let title = util::wide("关于作者");
+    let instruction = util::wide(&format!("keyboard-plus v{}", crate::APP_VERSION));
+    let content = util::wide(&format!(
+        "键盘防抖工具 · MIT License\n\n作者：{}\nGitHub：https://github.com/singcl\n个人主页：https://imcoco.top",
         crate::AUTHOR
-    );
-    if util::msg_box_question(Some(owner), "关于作者", &msg) {
-        open_url(Some(owner), crate::PROJECT_URL);
+    ));
+    let btn_project = util::wide("项目主页");
+    let btn_site = util::wide("个人主页");
+
+    let buttons = [
+        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_PROJECT, pszButtonText: PCWSTR(btn_project.as_ptr()) },
+        TASKDIALOG_BUTTON { nButtonID: ID_OPEN_SITE, pszButtonText: PCWSTR(btn_site.as_ptr()) },
+    ];
+    let config = TASKDIALOGCONFIG {
+        cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
+        hwndParent: HWND::default(),
+        dwFlags: TASKDIALOG_FLAGS(TDF_USE_COMMAND_LINKS.0 | TDF_ALLOW_DIALOG_CANCELLATION.0),
+        pszWindowTitle: PCWSTR(title.as_ptr()),
+        Anonymous1: TASKDIALOGCONFIG_0 { pszMainIcon: TD_INFORMATION_ICON },
+        pszMainInstruction: PCWSTR(instruction.as_ptr()),
+        pszContent: PCWSTR(content.as_ptr()),
+        cButtons: buttons.len() as u32,
+        pButtons: buttons.as_ptr(),
+        ..Default::default()
+    };
+
+    let mut button = 0i32;
+    // SAFETY: config 与按钮数组均在调用期间有效；输出指针为局部变量。
+    let r = unsafe { TaskDialogIndirect(&config, Some(&mut button), None, None) };
+    if r.is_err() {
+        // TaskDialog 极少失败（如无 comctl v6 上下文），退回普通消息框兜底
+        util::msg_box_info(
+            Some(owner),
+            &String::from_utf16_lossy(&title),
+            &String::from_utf16_lossy(&content),
+        );
+        return;
+    }
+    match button {
+        ID_OPEN_PROJECT => open_url(None, crate::PROJECT_URL),
+        ID_OPEN_SITE => open_url(None, crate::AUTHOR_SITE_URL),
+        _ => {}
     }
 }
 

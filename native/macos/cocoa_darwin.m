@@ -264,11 +264,11 @@ void uiAboutAlert(const char *title, const char *message,
         // 添加按钮时记录响应序号（NSAlertFirstButtonReturn + 按钮下标），避免按标题反查
         NSInteger projectIdx = -1, siteIdx = -1;
         if (projectURL != NULL) {
-            [alert addButtonWithTitle:@"打开项目主页"];
+            [alert addButtonWithTitle:@"项目主页"];
             projectIdx = (NSInteger)[alert.buttons count] - 1;
         }
         if (siteURL != NULL) {
-            [alert addButtonWithTitle:@"打开个人网站"];
+            [alert addButtonWithTitle:@"个人主页"];
             siteIdx = (NSInteger)[alert.buttons count] - 1;
         }
         [alert addButtonWithTitle:@"好"];
