@@ -1,8 +1,8 @@
 ## 本次更新
 
-- 新增「关于作者」：托盘 / 菜单栏菜单可查看版本、许可与作者信息，「是」一键直达项目主页（Windows / macOS）
-- 作者信息：singcl · https://github.com/singcl · https://imcoco.top
-- 弹窗样式与「检查更新」一致，精简版同样包含；功能与配置无变化，直接替换升级即可
+- 「关于作者」支持一键打开两个链接：「是」打开作者个人主页（https://imcoco.top），「否」打开项目主页（GitHub），右上角 × 仅关闭
+- 按钮文案精简，Windows 与 macOS 表现一致
+- 精简版同样包含；功能与配置无变化，直接替换升级即可
 
 ## 下载
 
@@ -22,4 +22,4 @@ Go 实现保留在 [`go`](https://github.com/singcl/keyboard/tree/go) 分支，�
 
 详细说明与各平台功能差异见 [README](https://github.com/singcl/keyboard#readme)。
 
-**完整改动**：https://github.com/singcl/keyboard/commits/v2.3.0
+**完整改动**：https://github.com/singcl/keyboard/commits/v2.4.0
