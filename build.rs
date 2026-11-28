@@ -27,6 +27,10 @@ fn version() -> String {
         .unwrap_or_else(|| env::var("CARGO_PKG_VERSION").unwrap())
 }
 
+// build.rs 本身按宿主机编译：embed_resource 只声明为 Windows 宿主的
+// build-dependency，因此这段必须 cfg(windows) 排除，否则在 macOS/Linux
+// 宿主上连 build 脚本都编不过（embed_resource 不在作用域）。
+#[cfg(windows)]
 fn build_windows(version: &str) {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let rc_path = out_dir.join("keyboard-plus.rc");
@@ -37,6 +41,9 @@ fn build_windows(version: &str) {
         .manifest_optional()
         .unwrap();
 }
+
+#[cfg(not(windows))]
+fn build_windows(_version: &str) {}
 
 // VERSIONINFO 与 go 版 winres.json 保持一致：英文与简体中文两套字符串。
 fn windows_rc(version: &str) -> String {
